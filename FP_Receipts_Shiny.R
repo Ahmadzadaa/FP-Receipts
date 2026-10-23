@@ -1,5 +1,6 @@
 # =============================================================================
 # FP RECEIPTS — İNTERAKTİV ANALİTİKA STUDİYASI
+# Müəllif: Ziyad
 # Bütün R kodu, CSS dizaynı və JavaScript bu bir faylın daxilindədir.
 # =============================================================================
 # İşə salmaq (R >= 4.1):
@@ -67,6 +68,19 @@ options(shiny.maxRequestSize = 20 * 1024^2, shiny.sanitize.errors = TRUE)
   }
   normalizePath(candidates[which(found)[1]], mustWork = TRUE)
 })
+
+# GitHub ZIP arxivindən yalnız LFS göstəricisi endirilibsə, aydın təlimat verin.
+.fp_is_lfs_pointer <- function(path) {
+  con <- file(path, open = 'rb')
+  on.exit(close(con))
+  marker <- charToRaw('version https://git-lfs.github.com/spec/v1')
+  identical(readBin(con, what = 'raw', n = length(marker)), marker)
+}
+.fp_data_files <- file.path(.fp_data_dir, c('fp_receipts.rds', 'fp_map.rds'))
+if (any(vapply(.fp_data_files, .fp_is_lfs_pointer, logical(1)))) {
+  stop('RDS əvəzinə Git LFS göstəricisi tapıldı. Repo qovluğunda git lfs pull işlədin ',
+       'və ya GitHub Releases-dən həqiqi RDS fayllarını endirin.', call. = FALSE)
+}
 
 # ── DAXİLİ DİZAYN VƏ BRAUZER FUNKSİYALARI ─────────────────────────────────
 
@@ -249,7 +263,7 @@ nav_item <- function(id,label,ico) actionButton(paste0('nav_',id),label,icon=ico
 build_ui <- function(store) {
   m<-store$meta
   fluidPage(theme=bslib::bs_theme(version=5,base_font='system-ui',primary='#0b7666',bg='#f3f5f7',fg='#172a3a'),
-    tags$head(tags$title('FP Receipts | Analitika'),tags$meta(name='viewport',content='width=device-width, initial-scale=1'),tags$style(HTML(.fp_css)),tags$script(HTML(.fp_js))),
+    tags$head(tags$title('FP Receipts | Analitika'),tags$meta(name='author',content='Ziyad'),tags$meta(name='viewport',content='width=device-width, initial-scale=1'),tags$style(HTML(.fp_css)),tags$script(HTML(.fp_js))),
     tags$div(class='app-shell',
       tags$aside(class='rail',
         tags$div(class='brand',tags$span(class='brand-mark','FP'),tags$div(tags$strong('Receipts'),tags$small('ANALİTİKA STUDİYASI'))),
@@ -321,7 +335,7 @@ build_ui <- function(store) {
             chart_card('Mənbə və hazırlıq məlumatı',NULL,uiOutput('source_info'))
           )
         ),
-        tags$footer(class='app-footer',tags$span('FP Receipts · Yerli analitik iş sahəsi'),tags$span('AZN · 2024 · Sətir səviyyəsində təhlil'))
+        tags$footer(class='app-footer',tags$span('FP Receipts · Ziyad · Yerli analitik iş sahəsi'),tags$span('AZN · 2024 · Sətir səviyyəsində təhlil'))
       )
     )
   )
@@ -451,7 +465,7 @@ make_server <- function(store) function(input,output,session) {
   output$report_html<-downloadHandler(filename=function()paste0('FP_Hesabat_',Sys.Date(),'.html'),content=function(file){
     s<-sums();f<-state$applied;qa<-quality_display();fc<-forecast();ent<-head(entity_metrics(store,ids(),f$corrected,'pos'),15)
     htable<-function(x)tags$table(tags$thead(tags$tr(lapply(names(x),tags$th))),tags$tbody(lapply(seq_len(nrow(x)),function(i)tags$tr(lapply(x[i,,drop=FALSE],function(v)tags$td(as.character(v)))))))
-    doc<-tags$html(lang='az',tags$head(tags$meta(charset='UTF-8'),tags$title('FP Receipts — hesabat'),tags$style('body{font:15px system-ui;color:#183347;max-width:1100px;margin:50px auto;padding:0 24px}h1{font-size:38px}h2{margin-top:45px;color:#0b7666}table{border-collapse:collapse;width:100%;font-size:12px}th,td{padding:9px;border-bottom:1px solid #dce6e9;text-align:left}th{background:#edf4f3}.note{background:#f8eddb;padding:18px;line-height:1.8}pre{white-space:pre-wrap;background:#f4f6f7;padding:16px}')),tags$body(tags$h1('FP Receipts'),tags$p('Cari analiz kəsiminin hesabatı'),tags$p(paste(f$dates,collapse=' — ')),tags$div(class='note',paste('Hesablama bazası:',if(f$corrected)'qnt − 1 və unit_price − 1'else'xam dəyərlər','.',if(f$payments)'Avans və kredit ödənişləri daxildir.'else'Satış olmayan ödənişlər çıxarılıb.','Bütün göstəricilər sətir səviyyəsindədir. POS adları mağaza identifikatoru deyil.')),tags$h2('1. Deskriptiv təhlil'),htable(data.frame(Göstərici=c('Məbləğ, AZN','Sətir sayı','Median sətir gəliri, AZN','POS adı','Xəritə əhatəsi, %'),Dəyər=c(fmt(s$revenue,2),fmt(s$n),fmt(s$median,2),fmt(s$pos),fmt(s$mapped*100,2)))),tags$h3('İlk 15 POS adı'),htable(data.frame(Ad=ent$name,`Gelir_AZN`=round(ent$revenue,2),Setir=ent$n)),tags$h2('2. Anomaliyalar'),tags$p('Aşağı və yüksək həcm diaqnostik siqnaldır. Mənbə səbəbləri ayrıca yoxlanmalıdır.'),htable(qa),tags$h2('3. Proqnoz və fərziyyələr'),if(fc$ok)tagList(tags$p(paste(nrow(fc$train),'təlim,',nrow(fc$test),'test günü. Gələcək hissə şərti qiymətləndirmədir.')),htable(fc$scores[,c('model','MAE','RMSE','MAPE','WAPE')]),tags$p(paste('Wilcoxon p',pfmt(fc$wilcox),' Tam model R²',fmt(fc$r2,3))))else tags$p(fc$message),tags$h2('4. Xülasə'),tags$p('Məlumat tamlığı, −1 düzəlişinin təsdiqi və POS/məhsul identifikatorları analizin prioritetləridir. Məhsul növü və mənfəət nəticələri yalnız xəritələnmiş nümunəyə aiddir.'),tags$h3('Tətbiq edilmiş filtrlər'),tags$pre(jsonlite::toJSON(f,pretty=TRUE,auto_unbox=TRUE,na='null')),tags$p('Mənbələr: fp_receipts.rds, fp_map.rds; DA_Yekun_Layihe_Ramin1.Rmd və HTML hesabatının qaydaları.')))
+    doc<-tags$html(lang='az',tags$head(tags$meta(charset='UTF-8'),tags$meta(name='author',content='Ziyad'),tags$title('FP Receipts — hesabat'),tags$style('body{font:15px system-ui;color:#183347;max-width:1100px;margin:50px auto;padding:0 24px}h1{font-size:38px}h2{margin-top:45px;color:#0b7666}table{border-collapse:collapse;width:100%;font-size:12px}th,td{padding:9px;border-bottom:1px solid #dce6e9;text-align:left}th{background:#edf4f3}.note{background:#f8eddb;padding:18px;line-height:1.8}pre{white-space:pre-wrap;background:#f4f6f7;padding:16px}')),tags$body(tags$h1('FP Receipts'),tags$p('Cari analiz kəsiminin hesabatı · Ziyad'),tags$p(paste(f$dates,collapse=' — ')),tags$div(class='note',paste('Hesablama bazası:',if(f$corrected)'qnt − 1 və unit_price − 1'else'xam dəyərlər','.',if(f$payments)'Avans və kredit ödənişləri daxildir.'else'Satış olmayan ödənişlər çıxarılıb.','Bütün göstəricilər sətir səviyyəsindədir. POS adları mağaza identifikatoru deyil.')),tags$h2('1. Deskriptiv təhlil'),htable(data.frame(Göstərici=c('Məbləğ, AZN','Sətir sayı','Median sətir gəliri, AZN','POS adı','Xəritə əhatəsi, %'),Dəyər=c(fmt(s$revenue,2),fmt(s$n),fmt(s$median,2),fmt(s$pos),fmt(s$mapped*100,2)))),tags$h3('İlk 15 POS adı'),htable(data.frame(Ad=ent$name,`Gelir_AZN`=round(ent$revenue,2),Setir=ent$n)),tags$h2('2. Anomaliyalar'),tags$p('Aşağı və yüksək həcm diaqnostik siqnaldır. Mənbə səbəbləri ayrıca yoxlanmalıdır.'),htable(qa),tags$h2('3. Proqnoz və fərziyyələr'),if(fc$ok)tagList(tags$p(paste(nrow(fc$train),'təlim,',nrow(fc$test),'test günü. Gələcək hissə şərti qiymətləndirmədir.')),htable(fc$scores[,c('model','MAE','RMSE','MAPE','WAPE')]),tags$p(paste('Wilcoxon p',pfmt(fc$wilcox),' Tam model R²',fmt(fc$r2,3))))else tags$p(fc$message),tags$h2('4. Xülasə'),tags$p('Məlumat tamlığı, −1 düzəlişinin təsdiqi və POS/məhsul identifikatorları analizin prioritetləridir. Məhsul növü və mənfəət nəticələri yalnız xəritələnmiş nümunəyə aiddir.'),tags$h3('Tətbiq edilmiş filtrlər'),tags$pre(jsonlite::toJSON(f,pretty=TRUE,auto_unbox=TRUE,na='null')),tags$p('Mənbələr: fp_receipts.rds, fp_map.rds; DA_Yekun_Layihe_Ziyad.Rmd və HTML hesabatının qaydaları.')))
     writeLines(paste0('<!DOCTYPE html>\n',as.character(doc)),file,useBytes=TRUE)
   })
 }

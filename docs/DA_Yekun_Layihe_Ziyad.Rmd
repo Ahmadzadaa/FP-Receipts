@@ -1,7 +1,7 @@
 ---
-title: "DA Yekun Layihə"
-author: "Ramin Əsədov"
-date: "27 oktyabr 2026"
+title: "FP Receipts — Satış analitikası"
+author: "Ziyad"
+date: "23 oktyabr 2026"
 output:
     html_document:
       toc: true
@@ -32,7 +32,7 @@ library(lubridate)
 library(stringr)
 
 # Data fayllarının yerləşdiyi qovluq
-data_dir <- "C:/Mine files/Class 309"
+data_dir <- Sys.getenv("FP_RECEIPTS_DATA_DIR", unset = if (file.exists("fp_receipts.rds")) "." else "..")
 
 # Xam datada qnt və unit_price sütunlarına sistematik olaraq +1 əlavə olunub (sübutlar 1.2 bölməsindədir).
 # Düzəliş tətbiq etmək istəmədikdə bu dəyəri 0 edin.
@@ -110,8 +110,8 @@ stat_cedveli <- function(df, cols) {
 Bu bölmədə xammal məlumatının ümumi strukturu və əsas xüsusiyyətləri təqdim olunur. Məlumat pərakəndə satış əməliyyatlarını əks etdirir. Hər bir sətir bir məhsul üzrə satış əməliyyatını ifadə edir. Dataset müxtəlif mağazalar, tarixlər və məhsullar üzrə toplanmış yüksək həcmli məlumatdan ibarətdir. Bu mərhələdə məqsəd yalnız raw datanın tanıdılması və ilkin anlayışın formalaşdırılmasıdır.
 
 ```{r t3, warning=FALSE, echo=TRUE, error=FALSE, include=TRUE, message=FALSE}
-fp_main_xammal <- readRDS("C:/Mine files/Class 309/fp_receipts.rds")
-fp_map         <- readRDS("C:/Mine files/Class 309/fp_map.rds")
+fp_main_xammal <- readRDS(file.path(data_dir, "fp_receipts.rds"))
+fp_map         <- readRDS(file.path(data_dir, "fp_map.rds"))
 
 glimpse(fp_main_xammal)
 

@@ -1,59 +1,109 @@
-# FP Receipts — İnteraktiv satış analitikası
+# FP Receipts — Ziyad
 
-Azərbaycan dilində **R Shiny** tətbiqi, analitik hesabat və PowerPoint təqdimatı. Tətbiqin bütün R kodu, CSS dizaynı və JavaScript funksiyaları **bir `FP_Receipts_Shiny.R` faylındadır**.
+### Retail Sales Analytics Portfolio
 
-## Portfolio overview
+A retail analytics case study built with **R, Shiny, data.table and Plotly**, covering **10,000,909 receipt line items**. The project combines exploratory analysis, data-quality diagnostics, chronological forecast validation and scenario modelling, with an interactive application and a 21-slide executive presentation.
 
-A retail analytics case study built with **R, Shiny, data.table and Plotly**, covering **10,000,909 receipt line items**. It combines exploratory analysis, data-quality diagnostics, time-series forecasting, scenario modelling and an executive presentation.
+**Portfolio müəllifi: Ziyad** · **Məlumat dövrü: 19 aprel – 31 may 2024**
 
-**Skills demonstrated:** preparing large datasets, repairing text encoding, normalising product/POS names, designing interactive dashboards, validating forecasts with a chronological holdout, and communicating analytical limitations.
-
-**Selected findings:** the default adjusted sales base contains **9,992,904 line items** and **AZN 55.01 million** in sales value. Product mapping covers approximately **1.32%** of rows, which limits category and profit conclusions. Only **24 of 43 calendar days** meet the source-wide normal-volume criterion; forecasts are presented as conditional estimates.
-
-The original Rmd/HTML report is retained as the analytical reference. The Shiny application implements the interactive workflow in a single `.R` file; the presentation summarises the analysis in 21 slides.
+Tətbiqin bütün R kodu, CSS dizaynı və JavaScript funksiyaları **bir [`FP_Receipts_Shiny.R`](FP_Receipts_Shiny.R) faylındadır**.
 
 ![FP Receipts tətbiqinin görünüşü](assets/preview.png)
 
-## Layihənin tərkibi
+## Sürətli keçidlər
 
-| Fayl | Təyinatı |
+| Baxmaq istədiyiniz | Keçid |
 | --- | --- |
-| [`FP_Receipts_Shiny.R`](FP_Receipts_Shiny.R) | Tək fayldan işləyən interaktiv Shiny tətbiqi |
-| [`presentation/FP_Receipts_Teqdimat.pptx`](presentation/FP_Receipts_Teqdimat.pptx) | 21 slayddan ibarət təqdimat |
-| [`docs/DA_Yekun_Layihe_Ramin1.Rmd`](docs/DA_Yekun_Layihe_Ramin1.Rmd) | Verilmiş ilkin analiz mənbəyi |
-| [`docs/DA_Yekun_Layihe_Ramin1.html`](docs/DA_Yekun_Layihe_Ramin1.html) | İlkin analizin hazır HTML hesabatı |
-| [`data/manifest.json`](data/manifest.json) | Məlumat fayllarının ölçüləri və SHA-256 yoxlama izləri |
+| Tək fayldan işləyən tətbiq | [`FP_Receipts_Shiny.R`](FP_Receipts_Shiny.R) |
+| 21 slayddan ibarət təqdimat | [`FP_Receipts_Teqdimat.pptx`](presentation/FP_Receipts_Teqdimat.pptx) |
+| Tam R Markdown analizi | [`DA_Yekun_Layihe_Ziyad.Rmd`](docs/DA_Yekun_Layihe_Ziyad.Rmd) |
+| Hazır HTML hesabatı | [`DA_Yekun_Layihe_Ziyad.html`](docs/DA_Yekun_Layihe_Ziyad.html) |
+| Satış cədvəli, tam məlumat | [`fp_receipts.rds`](fp_receipts.rds) |
+| Məhsul xəritəsi, tam məlumat | [`fp_map.rds`](fp_map.rds) |
+| Cədvəllərin və sütunların izahı | [Data dictionary](docs/DATA_DICTIONARY.md) |
+| Hesablamalar və məhdudiyyətlər | [Metodologiya](docs/METHODOLOGY.md) |
+| Sınaq mühitinin paket versiyaları | [Environment](docs/ENVIRONMENT.md) |
 
-## İşə salmaq
+HTML hesabatını GitHub-dan **Download raw file** ilə endirib brauzerdə açın. Təqdimatı endirib PowerPoint-də açmaq mümkündür. İnteraktiv Shiny tətbiqini işlətmək üçün aşağıdakı R quraşdırma addımlarını izləyin.
 
-R **4.1 və ya daha yeni versiya** istifadə edin. RStudio-da işlətmək də mümkündür.
+## Layihənin məqsədi
 
-### 1. Layihəni və məlumatı endirin
+Layihə satış həcmi və gəlirin strukturunu araşdırır, böyük və natamam məlumatın qərarlara təsirini göstərir, proqnozu sadə baza modelləri ilə müqayisə edir. Rəqəmlərlə yanaşı onların hansı məlumat bazasından hesablandığını da göstərmək əsas prinsipdir.
 
-Layihəni klonlayın və ya **Code → Download ZIP** seçin. İki RDS faylı [v1.0.0 buraxılışının Assets bölməsindədir](https://github.com/Ahmadzadaa/FP-Receipts/releases/tag/v1.0.0).
+**Skills demonstrated:** large-data preparation, text-encoding repair, product/POS-name normalisation, interactive dashboard design, anomaly diagnostics, chronological model validation and communicating analytical limitations.
 
-`fp_receipts.rds` və `fp_map.rds` fayllarını `.R` faylı ilə eyni qovluğa qoyun:
+## İki məlumat cədvəli
 
-```text
-FP-Receipts/
-├── FP_Receipts_Shiny.R
-├── fp_receipts.rds
-├── fp_map.rds
-├── docs/
-└── presentation/
+| Xüsusiyyət | `fp_receipts` | `fp_map` |
+| --- | --- | --- |
+| Fayl | [`fp_receipts.rds`](fp_receipts.rds) | [`fp_map.rds`](fp_map.rds) |
+| Sətir sayı | **10 000 909** | **118 118** |
+| Sütun sayı | **6** | **4** |
+| Məzmun | Məhsul əməliyyatları | Aylıq məhsul kateqoriyası və mənfəət marjası |
+| Dövr | 19.04–31.05.2024, məlumatı olan 40 gün | 202403, 202404, 202405 |
+| Fayl ölçüsü | 231 961 439 bayt, təxminən 221 MiB | 2 168 558 bayt, təxminən 2,07 MiB |
+| Brauzerdə 10 sətirlik nümunə | [`fp_receipts_preview.csv`](data/fp_receipts_preview.csv) | [`fp_map_preview.csv`](data/fp_map_preview.csv) |
+
+Tam RDS faylları reponun kökündə **Git LFS** ilə versiyalanır. CSV nümunələri yalnız ilk 10 xam sətri göstərir və tam məlumatı əvəz etmir. Xam məlumatın dəyərləri dəyişdirilməyib; düzəlişlər tətbiqdə hesablanır.
+
+### `fp_receipts` sütunları
+
+| Sütun | R tipi | İzah |
+| --- | --- | --- |
+| `pos` | character | POS/obyekt adı; unikal mağaza və ya filial identifikatoru deyil |
+| `rec_date` | Date | Əməliyyatın tarixi |
+| `rec_id` | character | Mənbədə sətir identifikatoru; eyni qəbzin məhsullarını qruplaşdırmağa kifayət etmir |
+| `product_name` | character | Məhsulun xam adı; ümumi adlar və kodlaşdırma problemləri ola bilər |
+| `qnt` | numeric | Xam miqdar; standart analizdə `qnt - 1` tətbiq olunur |
+| `unit_price` | numeric | Xam vahid qiymət, AZN; standart analizdə `unit_price - 1` tətbiq olunur |
+
+### `fp_map` sütunları
+
+| Sütun | R tipi | İzah |
+| --- | --- | --- |
+| `period` | numeric | Ay açarı, `YYYYMM`; məsələn, `202404` |
+| `product_type` | character | Mənbə kateqoriyası: `FOOD` və ya `NON-FOOD` |
+| `product` | character | Xəritədəki məhsul adı |
+| `profit_margin` | numeric | Mənfəət marjası nisbəti; `0.21` dəyəri 21%-dir |
+
+**Əlaqə:** əməliyyat tarixindən çıxarılan ay + normallaşdırılmış məhsul adı. Eyni ay və məhsul açarının ilk xəritə sətri saxlanılır. Uyğunlaşdırma satış sətirlərinin təxminən **1,32%**-ni əhatə edir. Bu səbəbdən kateqoriya və mənfəət nəticələrinin təmsil gücü məhduddur. [Ətraflı sütun və əlaqə izahı](docs/DATA_DICTIONARY.md).
+
+## Layihəni endirmək
+
+### Variant A: Git LFS ilə klonlamaq
+
+Əvvəlcə [Git LFS](https://git-lfs.com/) quraşdırın. Sonra terminalda:
+
+```sh
+git lfs install
+git clone https://github.com/Ahmadzadaa/FP-Receipts.git
+cd FP-Receipts
+git lfs pull
 ```
+
+Bu üsul tətbiqi və iki tam RDS faylını eyni qovluğa endirir. Böyük fayllar Git tarixçəsində kiçik istinadlarla izlənir və məzmunları LFS vasitəsilə alınır. [GitHub LFS izahı](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-git-large-file-storage).
+
+### Variant B: Brauzerdən endirmək
+
+1. **Code → Download ZIP** seçin və arxivi açın.
+2. [`fp_receipts.rds`](fp_receipts.rds) və [`fp_map.rds`](fp_map.rds) səhifələrində **Download raw file** seçin. Alternativ olaraq [Releases → v1.1.0 → Assets](https://github.com/Ahmadzadaa/FP-Receipts/releases/tag/v1.1.0) bölməsindən iki RDS faylını endirin.
+3. Hər iki faylı `FP_Receipts_Shiny.R` ilə eyni qovluğa qoyun.
+
+ZIP arxivi LFS məzmunu əvəzinə kiçik göstərici faylı verə bilər. Əsl `fp_receipts.rds` təxminən 221 MiB, `fp_map.rds` isə 2,07 MiB-dır. Bir neçə yüz baytlıq mətn faylı RDS məlumatı deyil. Tətbiq belə halı aşkar edib `git lfs pull` və ya Releases-dən endirmə təlimatı göstərir.
 
 GitHub CLI ilə alternativ:
 
 ```sh
 gh repo clone Ahmadzadaa/FP-Receipts
 cd FP-Receipts
-gh release download v1.0.0 --repo Ahmadzadaa/FP-Receipts --pattern '*.rds'
+gh release download v1.1.0 --repo Ahmadzadaa/FP-Receipts --pattern '*.rds'
 ```
 
-221 MiB-lıq `fp_receipts.rds` GitHub-un [100 MiB adi fayl limitini](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github) keçdiyinə görə məlumatlar Git tarixçəsində deyil, Release Assets daxilində saxlanılır. `Download ZIP` RDS fayllarını daxil etmir; onları buraxılışdan ayrıca endirin.
+## R və RStudio-da işə salmaq
 
-### 2. R paketlərini quraşdırın
+**R 4.1 və ya daha yeni versiya** lazımdır. Layihə R 4.4.2 ilə yoxlanılıb. İlk hazırlıq mərhələsi 10 milyon sətirə görə vaxt və yaddaş tələb edir.
+
+### 1. Paketləri quraşdırın
 
 R konsolunda bir dəfə:
 
@@ -64,9 +114,9 @@ install.packages(c(
 ))
 ```
 
-### 3. Tətbiqi açın
+### 2. Tətbiqi açın
 
-RStudio-da `FP_Receipts_Shiny.R` faylını açıb **Source** düyməsini basın. Və ya layihə qovluğunda R konsolunda:
+RStudio-da `FP_Receipts_Shiny.R` faylını açıb **Source** düyməsini basın. Konsolda alternativ:
 
 ```r
 source("FP_Receipts_Shiny.R", encoding = "UTF-8")
@@ -78,7 +128,23 @@ Terminaldan:
 Rscript FP_Receipts_Shiny.R
 ```
 
-Tətbiq yerli brauzerdə açılır. İlk açılış 10 milyon sətrin hazırlanmasına görə daha uzun çəkə bilər; sonrakı açılışlar R istifadəçisinin keş qovluğundan istifadə edir. Orijinal RDS faylları yalnız oxunur. Serveri dayandırmaq üçün RStudio-da **Stop**, terminalda **Ctrl+C** basın.
+Tətbiq brauzerdə açılır. RStudio-da **Stop**, terminalda **Ctrl+C** ilə dayandırın. RDS faylları yalnız oxunur. İlk hazırlıqdan sonra istifadəçinin R keş qovluğunda yığcam baza saxlanılır; növbəti açılışlar bu keşdən istifadə edir.
+
+Qovluq quruluşu:
+
+```text
+FP-Receipts/
+├── FP_Receipts_Shiny.R
+├── fp_receipts.rds
+├── fp_map.rds
+├── README.md
+├── data/                    # 10 sətirlik CSV nümunələri, manifest və SHA-256
+├── docs/                    # Ziyad Rmd/HTML hesabatı və izahlar
+├── presentation/            # PowerPoint təqdimatı
+└── assets/                  # Tətbiqin görüntüsü
+```
+
+### 3. Alternativ parametrlər
 
 Məlumat başqa qovluqdadırsa, Source-dan əvvəl:
 
@@ -86,38 +152,74 @@ Məlumat başqa qovluqdadırsa, Source-dan əvvəl:
 Sys.setenv(FP_RECEIPTS_DATA_DIR = "/tam/yol/melumat_qovlugu")
 ```
 
-Portu seçmək üçün `FP_SHINY_PORT`, avtomatik brauzeri söndürmək üçün `FP_OPEN_BROWSER=0`, keş yerini dəyişmək üçün `FP_RECEIPTS_CACHE_DIR` istifadə oluna bilər. Server `127.0.0.1` ünvanında işləyir. GitHub repoda kodu saxlayır; Shiny-ni işlətmək üçün R prosesi lazımdır.
+| Parametr | Təyinat |
+| --- | --- |
+| `FP_RECEIPTS_DATA_DIR` | İki RDS faylının olduğu qovluq |
+| `FP_SHINY_PORT` | Məsələn, `3847`; boş saxlananda uyğun port avtomatik seçilir |
+| `FP_OPEN_BROWSER` | `0` olduqda brauzeri avtomatik açmır |
+| `FP_RECEIPTS_CACHE_DIR` | Hazırlıq keşinin saxlanacağı qovluq |
 
-## Analiz bölmələri
+GitHub layihəni saxlayır; Shiny üçün R prosesi işləməlidir. Tətbiq yerli `127.0.0.1` ünvanından açılır.
 
-1. **İcmal:** gəlir və həcm KPI-ları, günlük dinamika, həftə günləri və əvvəlki dövrlə müqayisə.
-2. **Satış strukturu:** qiymət aralıqları, ədəd/çəki bölgüsü, paylanma və məhsul xəritəsi.
-3. **POS və məhsullar:** reytinqlər, Pareto, axtarış, obyekt müqayisəsi və kliklə profil.
-4. **Anomaliyalar:** dəyişən hədlər, günlük keyfiyyət siqnalları və diaqnostik cədvəl.
-5. **Proqnoz və fərziyyələr:** dörd model, xronoloji test, MAE/RMSE/MAPE/WAPE, 80%/95% şərti intervallar.
-6. **Ssenari laboratoriyası:** qiymət, həcm və marja fərziyyələri; həssaslıq xəritəsi.
-7. **Məlumat araşdırıcısı:** axtarış, sıralama və seçilmiş sətir limitli cədvəl.
-8. **Metodologiya:** hesablama qaydaları, mənbə izləri və analizin məhdudiyyətləri.
+## Tətbiqdən istifadə
 
-Tarix, POS, məhsul, kateqoriya, satış növü, gün keyfiyyəti və qiymət filtrləri mövcuddur. **Tətbiq et** və ya **Ctrl/Cmd+Enter** ilə filtrləri tətbiq edin. Tünd görünüş, brauzerdə saxlanan filtr görünüşü, qrafik miqyaslama, CSV/JSON və dörd əsas hissəli HTML hesabat ixracı daxildir.
+| Bölmə | Nə göstərir və nə etmək olar |
+| --- | --- |
+| **İcmal** | Gəlir, sətir sayı, median gəlir, xəritə əhatəsi; günlük qrafikdə nöqtəyə kliklə günün profili |
+| **Satış strukturu** | Qiymət aralıqları və paylar; qiymət sütununa kliklə həmin aralığı bütün analizə tətbiq etmək |
+| **POS və məhsullar** | Reytinq, minimum aktiv gün, Pareto, axtarış, obyekt müqayisəsi və kliklə profil |
+| **Anomaliyalar** | Median hədlərini dəyişərək günlük siqnalları araşdırmaq və keyfiyyət cədvəlini endirmək |
+| **Proqnoz və fərziyyələr** | Dörd model, dəyişən test/üfüq, MAE/RMSE/MAPE/WAPE, Wilcoxon və reqressiya intervalları |
+| **Ssenari laboratoriyası** | Qiymət, həcm və marja fərziyyələri; gəlir təsiri və həssaslıq xəritəsi |
+| **Məlumat araşdırıcısı** | İlk 1 000–100 000 sətrin seçilən limiti, axtarış, sıralama və CSV ixracı |
+| **Metodologiya** | Hesablama bazası, mənbə izləri və nəticələrin məhdudiyyətləri |
 
-## Hesablamaları necə şərh etməli
+Tarix, POS, məhsul mətni, kateqoriya, ədəd/çəki ayrımı, gün statusu və qiymət filtrlərini seçin. Qlobal dəyişiklikləri **Tətbiq et** və ya **Ctrl/Cmd+Enter** ilə təsdiqləyin. **Sıfırla** standart görünüşü qaytarır. Ssenari sürgüləri öz bölməsində dərhal işləyir.
 
-- Mənbə dövrü: **19 aprel – 31 may 2024**, **10 000 909 məhsul sətri**. POS adı unikal mağaza/filial identifikatoru deyil.
-- Standartda ilkin hesabatın `qnt − 1` və `unit_price − 1` fərziyyəsi tətbiq olunur; mənbə sisteminin təsdiqi ayrıca lazımdır. Əlavə filtrlərdən bunu söndürmək mümkündür.
-- Avans və kredit ödənişləri standart satış bazasından çıxarılıb: **9 992 904 sətir**, **55 011 469,69 AZN**.
-- Məhsul xəritəsinin əhatəsi təxminən **1,32%**-dir. Mənfəət yalnız məlum marjalar üçün hesablanan şərti göstəricidir.
-- Təqvimdə 43 günün 40-da məlumat var. Mənbədə olmayan günlər sıfır satış kimi qəbul edilmir.
-- Proqnoz qısa və qeyri-bərabər əhatəli dövrə əsaslanır; ssenarilər tələb elastikliyini modelləşdirmir.
-- Araşdırıcıdakı sətir nömrəsi orijinal RDS-dəki mövqedir; `rec_id` deyil. Cədvəl yığcamlaşdırılmış analitik görünüşdür.
-- İlkin Rmd faylı dəyişdirilməyib və özündə əvvəlki müəllifin Windows fayl yollarını saxlayır. Hazır nəticəni oxumaq üçün HTML hesabatından istifadə edin; Shiny tətbiqi həmin Rmd-ni işlətməyə ehtiyac duymur.
+**Yadda saxla** tətbiq edilmiş filtrləri həmin brauzerin yerli yaddaşında saxlayır. Tünd görünüş, mobil menyu, qrafik zoom/pan, PNG, CSV, filtr JSON-u və dörd əsas hissəli HTML hesabat ixracı mövcuddur.
 
-## Məlumatın yoxlanması
+## Analizin dörd əsas hissəsi
 
-RDS faylları endirildikdən sonra macOS/Linux-da layihə qovluğunda:
+### 1. Deskriptiv təhlil
+
+Standart baza `qnt - 1`, `unit_price - 1` düzəlişini tətbiq edir və avans/kredit ödənişlərini çıxarır. Bu bazada **9 992 904 məhsul sətri**, **55 011 469,69 AZN satış gəliri**, **1,80 AZN median sətir gəliri** var. Gəlir qiymət aralıqları, məhsul/POS adları və günlər üzrə araşdırılır.
+
+### 2. Anomaliyalar
+
+Mənbədə 43 təqvim gününün 40-da məlumat var: **24 normal**, **15 aşağı həcmli**, **1 yüksək həcmli gün**, **3 məlumatı olmayan tarix**. POS/məhsul adları və aşağı xəritə əhatəsi ayrıca yoxlanır. Statuslar diaqnostik siqnallardır; səbəbi sübut edən ETL qeydləri deyil.
+
+### 3. Proqnoz və fərziyyələr
+
+Standartda 24 normal günün son 5-i test, əvvəlki 19-u təlim üçün ayrılır. Reqressiya ilə sadə orta, son gün və həftə gününün ortası müqayisə olunur. Reqressiyanın test MAPE-si təxminən **38,3%**, MAE-si **441 614,6 AZN**-dir. Sadə orta modelinin MAE-si **411 575,8 AZN**-dir. Bu test reqressiyanın üstünlüyünü təsdiqləmir.
+
+### 4. Xülasə
+
+Qərarların keyfiyyəti məlumatın tamlığından və identifikatorlardan asılıdır. Növbəti addımlar: `-1` fərziyyəsini mənbə sistemi ilə təsdiqləmək, natamam günləri yoxlamaq, məhsul və POS kodlarını təkmilləşdirmək, daha uzun fasiləsiz tarixçədə proqnozu yenidən sınaqdan keçirmək.
+
+Bu rəqəmlər standart filtrlərə aiddir; tətbiqdə filtr dəyişəndə nəticələr yenidən hesablanır. [Formullar, testlər və şərh qaydaları](docs/METHODOLOGY.md).
+
+## Məlumatın bütövlüyü
+
+Layihə qovluğunda macOS/Linux terminalında:
 
 ```sh
 shasum -a 256 -c data/SHA256SUMS
 ```
 
-Tətbiq üçün filtrlər, boş nəticə, xam/düzəlişli yekunlar, 12 qrafik, proqnoz və ssenari, HTML hesabatı və CSV ixracları yerli mühitdə yoxlanılıb. Tək `.R` faylının ayrıca qovluqdan açılması da sınaqdan keçirilib.
+Fayl ölçüləri və SHA-256 izləri [`data/manifest.json`](data/manifest.json) daxilindədir. LFS və Releases-dəki məlumatlar eyni xam fayllardır.
+
+## Hesabatı yenidən yaratmaq
+
+Hazır HTML-ni açmaq üçün R lazım deyil. Rmd-ni yenidən işlətmək istəsəniz, tətbiq paketlərinə əlavə olaraq:
+
+```r
+install.packages(c("rmarkdown", "dplyr", "tidyr", "ggplot2", "lubridate"))
+Sys.setenv(FP_RECEIPTS_DATA_DIR = normalizePath("."))
+rmarkdown::render("docs/DA_Yekun_Layihe_Ziyad.Rmd")
+```
+
+RStudio-da Pandoc adətən birlikdə gəlir. Bu addım böyük məlumatın bütün hesabatını yenidən hesablayır; Shiny-ni açmaq üçün lazım deyil.
+
+## Yoxlamalar
+
+Filtrlər, boş nəticə, xam/düzəlişli yekunlar, 12 qrafik, proqnoz və ssenari, HTML hesabatı və CSV ixracları yerli mühitdə yoxlanılıb. Tək `.R` faylının ayrıca qovluqdan açılması sınaqdan keçirilib. Tam cədvəllər üçün ölçü və SHA-256 uyğunluğu yoxlanılır.

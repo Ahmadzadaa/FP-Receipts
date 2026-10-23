@@ -9,10 +9,10 @@
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 
-<meta name="author" content="Ramin Əsədov" />
+<meta name="author" content="Ziyad" />
 
 
-<title>DA Yekun Layihə</title>
+<title>FP Receipts — Satış analitikası</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -5144,9 +5144,9 @@ border-radius: 0px;
 
 
 
-<h1 class="title toc-ignore">DA Yekun Layihə</h1>
-<h4 class="author">Ramin Əsədov</h4>
-<h4 class="date">27 oktyabr 2026</h4>
+<h1 class="title toc-ignore">FP Receipts — Satış analitikası</h1>
+<h4 class="author">Ziyad</h4>
+<h4 class="date">23 oktyabr 2026</h4>
 
 </div>
 
@@ -5171,7 +5171,7 @@ border-radius: 0px;
 <span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="fu">library</span>(stringr)</span>
 <span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a></span>
 <span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a><span class="co"># Data fayllarının yerləşdiyi qovluq</span></span>
-<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>data_dir <span class="ot">&lt;-</span> <span class="st">&quot;C:/Mine files/Class 309&quot;</span></span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>data_dir <span class="ot">&lt;-</span> Sys.getenv(&quot;FP_RECEIPTS_DATA_DIR&quot;, unset = if (file.exists(&quot;fp_receipts.rds&quot;)) &quot;.&quot; else &quot;..&quot;)</span>
 <span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a></span>
 <span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a><span class="co"># Xam datada qnt və unit_price sütunlarına sistematik olaraq +1 əlavə olunub (sübutlar 1.2 bölməsindədir).</span></span>
 <span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a><span class="co"># Düzəliş tətbiq etmək istəmədikdə bu dəyəri 0 edin.</span></span>
@@ -5251,8 +5251,8 @@ bir sətir bir məhsul üzrə satış əməliyyatını ifadə edir. Dataset
 müxtəlif mağazalar, tarixlər və məhsullar üzrə toplanmış yüksək həcmli
 məlumatdan ibarətdir. Bu mərhələdə məqsəd yalnız raw datanın tanıdılması
 və ilkin anlayışın formalaşdırılmasıdır.</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>fp_main_xammal <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">&quot;C:/Mine files/Class 309/fp_receipts.rds&quot;</span>)</span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>fp_map         <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">&quot;C:/Mine files/Class 309/fp_map.rds&quot;</span>)</span>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>fp_main_xammal <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(file.path(data_dir, &quot;fp_receipts.rds&quot;))</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>fp_map         <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(file.path(data_dir, &quot;fp_map.rds&quot;))</span>
 <span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a></span>
 <span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="fu">glimpse</span>(fp_main_xammal)</span></code></pre></div>
 <pre><code>## Rows: 10,000,909

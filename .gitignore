@@ -1,5 +1,7 @@
-# Local data is distributed as GitHub Release assets.
+# RDS files in the root are tracked by Git LFS.
 *.rds
+!/fp_receipts.rds
+!/fp_map.rds
 *.RData
 .Rhistory
 .Ruserdata
