@@ -1,0 +1,824 @@
+---
+title: "DA Yekun Layihə"
+author: "Ramin Əsədov"
+date: "27 oktyabr 2026"
+output:
+    html_document:
+      toc: true
+      toc_float: true
+      highlight: breezedark
+      code_folding: hide
+---
+
+<script>
+   $(document).ready(function() {
+     $head = $('#header');
+     $head.prepend('<img src=\"https://www.aztu.edu.az/sub_site/assets/dist/img/logo-footerr.png\" style=\"float: right;width: 300px;\"/>')
+   });
+</script>
+
+## Başlanğıc
+
+```{r setup, warning=FALSE, echo=TRUE, error=FALSE, include=TRUE, message=FALSE}
+options(scipen = 999)
+knitr::opts_chunk$set(fig.width = 10, fig.height = 6)
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(plotly)
+library(DT)
+library(lubridate)
+library(stringr)
+
+# Data fayllarının yerləşdiyi qovluq
+data_dir <- "C:/Mine files/Class 309"
+
+# Xam datada qnt və unit_price sütunlarına sistematik olaraq +1 əlavə olunub (sübutlar 1.2 bölməsindədir).
+# Düzəliş tətbiq etmək istəmədikdə bu dəyəri 0 edin.
+duzelis <- 1
+
+# Ədədləri mətndə göstərmək üçün format funksiyası
+f <- function(x, d = 0) format(round(x, d), big.mark = " ", nsmall = d, scientific = FALSE)
+
+# Qrafiklərdə uzun adları qısaltmaq üçün
+qisalt <- function(x, n = 40) str_trunc(x, n)
+
+# Bütün cədvəllər üçün ortaq datatable funksiyası
+cedvel <- function(df) {
+  datatable(df,
+            extensions = 'Buttons',
+            options = list(paging = TRUE,
+                           searching = TRUE,
+                           fixedColumns = TRUE,
+                           autoWidth = TRUE,
+                           ordering = TRUE,
+                           dom = 'Bftp',
+                           buttons = c('copy', 'csv', 'excel', 'print')))
+}
+
+# İki dəfə kodlaşdırılmış (mojibake) mətnləri bərpa edir: "HÉ\u0099kim" -> "Həkim".
+# Bərpa alınmayan dəyərlər olduğu kimi saxlanılır.
+kodlasdirma_duzelt <- function(x) {
+  pis <- !is.na(x) & str_detect(x, "[ÃÉÂÄÅ]")
+  if (!any(pis)) return(x)
+  y <- iconv(x[pis], from = "UTF-8", to = "latin1")
+  Encoding(y) <- "UTF-8"
+  ok <- !is.na(y) & validUTF8(y)
+  x[pis][ok] <- y[ok]
+  x
+}
+
+# Məhsul adı üçün birləşdirmə açarı: bərpa olunmuş mətn, böyük hərf, artıq boşluqlar silinmiş
+mehsul_acar <- function(x) str_squish(toupper(kodlasdirma_duzelt(x)))
+
+# POS adı üçün açar: böyük hərf, Azərbaycan hərfləri -> latın, kodlaşdırma xətası "?" -> "E",
+# simvollar silinir. Beləliklə "MAGAZA", "MAĞAZA", "Mağaza " eyni açara düşür.
+pos_acar <- function(x) {
+  x <- toupper(x)
+  x <- chartr("ƏĞİŞÇÖÜ?", "EGISCOUE", x)
+  x <- gsub("[^A-Z0-9 ]", " ", x)
+  str_squish(x)
+}
+
+# Konkret mağazanı yox, ümumi növü bildirən POS adları (normallaşdırılmış formada)
+umumi_pos_adlari <- c("MAGAZA", "MARKET", "APTEK", "ANBAR", "ERZAQ MAGAZASI", "QARISIQ MALLAR MAGAZASI",
+                      "PERAKENDE TICARET", "KOSK", "TICARET OBYEKTI", "OBYEKT", "OFIS", "MEBEL MAGAZASI",
+                      "TOPDAN SATIS ANBARI", "TIKINTI MATERIALLARI MAGAZASI", "RESTORAN", "KAFE",
+                      "SUPERMARKET", "MINI MARKET")
+
+# Konkret məhsulu bildirməyən ümumi məhsul adları ("Sərbəst satış", "Ərzaq", "Məhsul" və s.)
+umumi_mehsul_regex <- "^(SƏRBƏST|SERBEST|ƏRZAQ|ERZAQ|ÜMUMI|UMUMI|SATIŞ|SATISH|SATIS|MƏHSUL|MEHSUL)\\b"
+
+# Ədədi dəyişənlər üçün təsviri statistika cədvəli
+stat_cedveli <- function(df, cols) {
+  bind_rows(lapply(cols, function(cl) {
+    x <- df[[cl]]
+    x <- x[!is.na(x)]
+    q <- quantile(x, c(0.25, 0.5, 0.75, 0.99), names = FALSE)
+    tibble(Dəyişən = cl, Müşahidə = length(x), Min = min(x), Q1 = q[1], Median = q[2],
+           Orta = mean(x), Q3 = q[3], P99 = q[4], Maks = max(x), SD = sd(x))
+  })) %>%
+    mutate(across(Min:SD, ~ round(.x, 2)))
+}
+```
+
+## 1. Deskriptiv təhlil
+
+### 1.1 Raw datanın ümumi təsviri
+
+Bu bölmədə xammal məlumatının ümumi strukturu və əsas xüsusiyyətləri təqdim olunur. Məlumat pərakəndə satış əməliyyatlarını əks etdirir. Hər bir sətir bir məhsul üzrə satış əməliyyatını ifadə edir. Dataset müxtəlif mağazalar, tarixlər və məhsullar üzrə toplanmış yüksək həcmli məlumatdan ibarətdir. Bu mərhələdə məqsəd yalnız raw datanın tanıdılması və ilkin anlayışın formalaşdırılmasıdır.
+
+```{r t3, warning=FALSE, echo=TRUE, error=FALSE, include=TRUE, message=FALSE}
+fp_main_xammal <- readRDS("C:/Mine files/Class 309/fp_receipts.rds")
+fp_map         <- readRDS("C:/Mine files/Class 309/fp_map.rds")
+
+glimpse(fp_main_xammal)
+
+# Ağır mətn əməliyyatları 10 mln sətrə yox, unikal dəyərlərə tətbiq olunur
+pos_unikal     <- unique(fp_main_xammal$pos)
+mehsul_unikal  <- unique(fp_main_xammal$product_name)
+pos_acar_unikal <- pos_acar(pos_unikal)
+
+# Sütunlar üzrə profil
+sutun_profili <- tibble(
+  Sütun           = names(fp_main_xammal),
+  Tip             = sapply(fp_main_xammal, function(x) class(x)[1]),
+  `Unikal dəyər`  = sapply(fp_main_xammal, n_distinct),
+  `NA sayı`       = sapply(fp_main_xammal, function(x) sum(is.na(x))),
+  Nümunə          = sapply(fp_main_xammal, function(x) as.character(x[1])))
+
+cedvel(sutun_profili)
+
+# Ümumi göstəricilər və data keyfiyyəti
+umumi_tesvir <- data.frame(
+  Göstərici = c("Sətir sayı",
+                "Başlanğıc tarix",
+                "Son tarix",
+                "Datası olan gün sayı",
+                "Təqvim üzrə gün sayı",
+                "Unikal rec_id sayı",
+                "Unikal POS adı",
+                "Normallaşdırılmış unikal POS adı",
+                "Adında '?' olan POS (kodlaşdırma xətası)",
+                "Unikal məhsul adı",
+                "Kodlaşdırması pozulmuş məhsul adı",
+                "Boş məhsul adı (sətir)",
+                "'Sərbəst satış / ticarət' (sətir)"),
+  Dəyər = c(f(nrow(fp_main_xammal)),
+            as.character(min(fp_main_xammal$rec_date)),
+            as.character(max(fp_main_xammal$rec_date)),
+            n_distinct(fp_main_xammal$rec_date),
+            as.numeric(max(fp_main_xammal$rec_date) - min(fp_main_xammal$rec_date)) + 1,
+            f(n_distinct(fp_main_xammal$rec_id)),
+            f(length(pos_unikal)),
+            f(n_distinct(pos_acar_unikal)),
+            f(sum(str_detect(pos_unikal, fixed("?")))),
+            f(length(mehsul_unikal)),
+            f(sum(str_detect(mehsul_unikal, "[ÃÉÂÄÅ]"))),
+            f(sum(str_squish(fp_main_xammal$product_name) == "")),
+            f(sum(str_detect(fp_main_xammal$product_name, "^Sərbəst")))),
+  check.names = FALSE)
+
+cedvel(umumi_tesvir)
+
+# Məhsul xəritəsi (fp_map): ay, məhsul növü və mənfəət marjası
+glimpse(fp_map)
+fp_map %>% count(period, product_type)
+```
+
+**Şərh:**<br>
+
+Satış datası `r f(nrow(fp_main_xammal))` sətir və 6 sütundan (`pos`, `rec_date`, `rec_id`, `product_name`, `qnt`, `unit_price`) ibarətdir. Data `r min(fp_main_xammal$rec_date)` – `r max(fp_main_xammal$rec_date)` dövrünü əhatə edir. Bu aralıqda `r as.numeric(max(fp_main_xammal$rec_date) - min(fp_main_xammal$rec_date)) + 1` təqvim günü var, amma yalnız `r n_distinct(fp_main_xammal$rec_date)` günün datası mövcuddur. Datada NA dəyər yoxdur, lakin bu, datanın təmiz olduğu demək deyil: boş məhsul adları, "Sərbəst satış" kimi ümumi adlar və kodlaşdırma xətaları mövcuddur.<br>
+
+`rec_id` hər sətirdə unikaldır. Yəni eyni qəbzə aid məhsulları birləşdirmək mümkün deyil və hər sətir ayrıca qəbz kimi görünür. Buna görə bu hesabatda bütün göstəricilər **qəbz** yox, **sətir** (məhsul əməliyyatı) səviyyəsində şərh olunur.<br>
+
+POS sütunu mağazanın unikal identifikatoru deyil. "MAGAZA", "MAĞAZA", "?RZAQ MAGAZASI" kimi adlar həm müxtəlif yazılışlarda, həm də yüzlərlə fərqli mağaza üçün eyni formada istifadə olunur. `r f(sum(str_detect(pos_unikal, fixed("?"))))` POS adında Azərbaycan hərfi "?" ilə əvəzlənib. Normallaşdırmadan sonra unikal POS adlarının sayı `r f(length(pos_unikal))`-dən `r f(n_distinct(pos_acar_unikal))`-ə düşür.<br>
+
+Məhsul adı sərbəst mətn kimi daxil edilir: `r f(length(mehsul_unikal))` fərqli ad var, onlardan `r f(sum(str_detect(mehsul_unikal, "[ÃÉÂÄÅ]")))`-nin kodlaşdırması pozulub (məsələn, "HÉ\u0099kim" = "Həkim"). Bu adlar 1.2-də avtomatik bərpa olunur.<br>
+
+Xəritə faylı (`fp_map`) 3 ay üzrə məhsulların FOOD/NON-FOOD növünü və mənfəət marjasını saxlayır.
+
+
+### 1.2 Statistik xülasə
+
+Bu bölmədə xammal məlumatı üzrə əsas ədədi göstəricilər təqdim olunur. Məqsəd dəyişənlərin ümumi davranışını, mümkün minimum və maksimum hədləri, həmçinin paylanma xüsusiyyətlərini ümumi səviyyədə anlamaqdır. Statistik göstəricilər sonrakı mərhələdə aparılacaq anomaliya və proqnoz təhlilləri üçün baza rolunu oynayır.
+
+```{r t1, warning=FALSE, echo=TRUE, error=FALSE, include=TRUE, message=FALSE}
+# --- Xam data ---
+summary(fp_main_xammal$qnt)
+summary(fp_main_xammal$unit_price)
+
+# +1 sürüşməsinin əlamətləri
+qnt_1_sayi      <- sum(fp_main_xammal$qnt == 1)
+qiymet_1_sayi   <- sum(fp_main_xammal$unit_price == 1)
+xam_umumi_gelir <- sum(as.numeric(fp_main_xammal$qnt) * fp_main_xammal$unit_price)
+
+qnt_pikler <- fp_main_xammal %>%
+  filter(qnt == round(qnt), qnt >= 9, qnt <= 22) %>%
+  count(qnt)
+qnt_pikler
+
+# --- Axtarış cədvəlləri (unikal dəyərlər üzrə) ---
+mehsul_lookup <- tibble(product_name = mehsul_unikal) %>%
+  mutate(product_name_duz = kodlasdirma_duzelt(product_name),
+         product_key      = str_squish(toupper(product_name_duz)),
+         # Satış olmayan sətirlər: avans və kredit ödənişi ("TV ... (KREDIT)" kimi kreditlə satış istisna)
+         satis_deyil      = str_detect(product_key, "\\bAVANS\\b") | str_detect(product_key, "^KREDIT\\b"),
+         umumi_mehsul     = product_key == "" | str_detect(product_key, umumi_mehsul_regex))
+
+# --- Təmizlənmiş data ---
+fp_main <- fp_main_xammal %>%
+  mutate(qnt        = qnt - duzelis,
+         unit_price = unit_price - duzelis,
+         gelir      = qnt * unit_price,
+         period     = year(rec_date) * 100 + month(rec_date),
+         pos_key    = pos_acar_unikal[match(pos, pos_unikal)],
+         satis_novu = ifelse(qnt == round(qnt), "Ədədlə", "Çəki ilə (kq)")) %>%
+  left_join(mehsul_lookup, by = "product_name")
+
+# Yoxlamalar: düzəlişdən sonra mənfi dəyər olmamalı, sətir sayı dəyişməməlidir
+stopifnot(min(fp_main$qnt) >= 0,
+          min(fp_main$unit_price) >= 0,
+          nrow(fp_main) == nrow(fp_main_xammal))
+
+xam_setir_sayi <- nrow(fp_main_xammal)
+rm(fp_main_xammal); invisible(gc())
+
+# Xəritə: ay + məhsul açarı ilə birləşdirmə.
+# Eyni ayda təkrarlanan məhsullar silinir, |marja| > 1 olan qeyri-real marjalar NA edilir.
+fp_map_uniq <- fp_map %>%
+  mutate(product_key   = mehsul_acar(product),
+         profit_margin = ifelse(abs(profit_margin) > 1, NA, profit_margin)) %>%
+  distinct(period, product_key, .keep_all = TRUE) %>%
+  select(period, product_key, product_type, profit_margin)
+
+stopifnot(!anyDuplicated(fp_map_uniq[, c("period", "product_key")]))
+
+fp_main_rv_prf <- fp_main %>%
+  left_join(fp_map_uniq, by = c("period", "product_key")) %>%
+  mutate(product_type2 = ifelse(is.na(product_type), "Bilinmir", product_type),
+         menfeet       = gelir * profit_margin)
+
+# Birləşdirmə sətirləri çoxaltmamalıdır
+stopifnot(nrow(fp_main_rv_prf) == xam_setir_sayi)
+
+rm(fp_main); invisible(gc())
+
+xerite_ehatesi    <- mean(fp_main_rv_prf$product_type2 != "Bilinmir")
+umumi_gelir       <- sum(fp_main_rv_prf$gelir)
+satis_deyil_sayi  <- sum(fp_main_rv_prf$satis_deyil)
+satis_deyil_gelir <- sum(fp_main_rv_prf$gelir[fp_main_rv_prf$satis_deyil])
+
+# --- Təsviri statistika (satış olmayan sətirlər xaric) ---
+fp_stat <- fp_main_rv_prf %>% filter(!satis_deyil)
+
+stat_umumi <- stat_cedveli(fp_stat, c("qnt", "unit_price", "gelir", "menfeet"))
+cedvel(stat_umumi)
+
+# Satış növü üzrə: ədədlə və çəki ilə satış
+stat_satis_novu <- fp_stat %>%
+  group_by(satis_novu) %>%
+  summarise(setir_sayi    = n(),
+            umumi_gelir   = round(sum(gelir), 2),
+            median_miqdar = round(median(qnt), 2),
+            median_qiymet = round(median(unit_price), 2),
+            median_gelir  = round(median(gelir), 2),
+            orta_gelir    = round(mean(gelir), 2),
+            .groups = "drop") %>%
+  mutate(setir_payi = round(100 * setir_sayi / sum(setir_sayi), 1),
+         gelir_payi = round(100 * umumi_gelir / sum(umumi_gelir), 1))
+cedvel(stat_satis_novu)
+
+# Mənfəət marjası xəritə səviyyəsində (FOOD / NON-FOOD)
+stat_marja <- fp_map_uniq %>%
+  filter(!is.na(profit_margin)) %>%
+  group_by(product_type) %>%
+  summarise(mehsul_sayi      = n(),
+            median_marja     = round(median(profit_margin), 3),
+            orta_marja       = round(mean(profit_margin), 3),
+            menfi_marja_payi = round(100 * mean(profit_margin < 0), 1),
+            .groups = "drop")
+cedvel(stat_marja)
+
+xerite_qeyri_real <- sum(abs(fp_map$profit_margin) > 1)
+rm(fp_stat); invisible(gc())
+```
+
+**Şərh:**<br>
+
+**Datada +1 sürüşməsi:**<br>
+Xam datada miqdarın və qiymətin minimumu dəqiq 1-dir. Miqdarı 1 olan cəmi `r f(qnt_1_sayi)` sətir var, halbuki pərakəndə satışda ən çox satılan miqdar 1 ədəd olmalıdır. Tam ədəd miqdarlarda pik nöqtələr 11, 16 və 21-dədir (yəni 10, 15, 20 + 1). Qiyməti dəqiq 1.00 olan `r f(qiymet_1_sayi)` sətir isə qiyməti 0 olan mallara uyğun gəlir. Bu əlamətlər göstərir ki, `qnt` və `unit_price` sütunlarına sistematik olaraq 1 əlavə olunub. Buna görə analizdə hər iki sütundan 1 çıxılmışdır. Düzəlişsiz ümumi gəlir `r f(xam_umumi_gelir / 1e6, 1)` mln AZN, düzəlişli gəlir isə `r f(umumi_gelir / 1e6, 1)` mln AZN təşkil edir.<br>
+
+**Satış olmayan sətirlər:**<br>
+Datada `r f(satis_deyil_sayi)` sətir kredit ödənişi və avansdır (məsələn, "Kredit ödənişi", "Xəstədən avans"). Onların ümumi məbləği `r f(satis_deyil_gelir)` AZN-dir. Bunlar məhsul satışı olmadığı üçün təsviri statistikadan və sonrakı bölmələrdən çıxarılıb. Kreditlə satılan məhsullar (məsələn, "TV ... (KREDIT)") isə satış kimi saxlanılıb.<br>
+
+**Satış miqdarı:**<br>
+Düzəlişdən sonra median miqdar `r stat_umumi$Median[stat_umumi$Dəyişən == "qnt"]`, orta miqdar `r stat_umumi$Orta[stat_umumi$Dəyişən == "qnt"]`-dir. Yəni adi satış əməliyyatında 1 ədəd məhsul alınır. Sətirlərin 99%-ində miqdar `r stat_umumi$P99[stat_umumi$Dəyişən == "qnt"]`-dən çox deyil, maksimum isə `r f(stat_umumi$Maks[stat_umumi$Dəyişən == "qnt"])`-dir. Bu, paylanmanın çox güclü sağa meylli olduğunu göstərir.<br>
+
+**Ədədlə və çəki ilə satış:**<br>
+Sətirlərin `r stat_satis_novu$setir_payi[stat_satis_novu$satis_novu == "Çəki ilə (kq)"]`%-ində miqdar kəsr ədəddir, yəni məhsul çəki ilə (kq) satılıb. Bu satışlar gəlirin `r stat_satis_novu$gelir_payi[stat_satis_novu$satis_novu == "Çəki ilə (kq)"]`%-ni təşkil edir. Çəki ilə satışda median miqdar `r stat_satis_novu$median_miqdar[stat_satis_novu$satis_novu == "Çəki ilə (kq)"]` kq, median gəlir `r stat_satis_novu$median_gelir[stat_satis_novu$satis_novu == "Çəki ilə (kq)"]` AZN-dir. Ədədlə satışda median gəlir `r stat_satis_novu$median_gelir[stat_satis_novu$satis_novu == "Ədədlə"]` AZN-dir.<br>
+
+**Vahid qiymət:**<br>
+Median qiymət `r stat_umumi$Median[stat_umumi$Dəyişən == "unit_price"]` AZN, 3-cü kvartil `r stat_umumi$Q3[stat_umumi$Dəyişən == "unit_price"]` AZN-dir, yəni qiymətlər aşağı seqmentdə sıx toplanıb. Lakin maksimum qiymət `r f(stat_umumi$Maks[stat_umumi$Dəyişən == "unit_price"])` AZN-dir və standart kənarlaşma (`r f(stat_umumi$SD[stat_umumi$Dəyişən == "unit_price"], 1)`) mediandan dəfələrlə böyükdür. Dataset həm gündəlik tələbat məhsullarını, həm də çox bahalı tək məhsulları əhatə edir.<br>
+
+**Gəlir:**<br>
+Sətir üzrə median gəlir `r stat_umumi$Median[stat_umumi$Dəyişən == "gelir"]` AZN, orta gəlir `r stat_umumi$Orta[stat_umumi$Dəyişən == "gelir"]` AZN-dir. Orta dəyərin mediandan xeyli böyük olması paylanmanın sağa meylli olduğunu göstərir: az sayda bahalı sətir ümumi dövriyyəyə güclü təsir edir. Buna görə müqayisələrdə orta dəyər yox, median əsas göstərici kimi istifadə olunmalıdır.<br><br>
+
+**Mənfəət:**<br>
+Mənfəət gəlirin xəritədəki mənfəət marjasına hasili kimi hesablanmışdır (`menfeet = gelir × profit_margin`). Xəritə ilə yalnız sətirlərin `r f(100 * xerite_ehatesi, 2)`%-i uyğunlaşır, ona görə mənfəət göstəriciləri datanın kiçik bir hissəsinə əsaslanır. Uyğunlaşan sətirlərdə median mənfəət `r stat_umumi$Median[stat_umumi$Dəyişən == "menfeet"]` AZN-dir. Xəritədəki `r f(nrow(fp_map))` sətirdən `r f(xerite_qeyri_real)`-də marja qeyri-realdır (|marja| > 1) və NA edilmişdir.<br>
+
+Marja xəritə səviyyəsində müqayisə olunduqda FOOD məhsullarında median marja `r stat_marja$median_marja[stat_marja$product_type == "FOOD"]`, NON-FOOD məhsullarında isə `r stat_marja$median_marja[stat_marja$product_type == "NON-FOOD"]`-dir. Məhsulların `r stat_marja$menfi_marja_payi[stat_marja$product_type == "FOOD"]`% (FOOD) və `r stat_marja$menfi_marja_payi[stat_marja$product_type == "NON-FOOD"]`% (NON-FOOD) hissəsində marja mənfidir, yəni bu məhsullar zərərlə və ya kampaniya qiyməti ilə satılır.
+
+
+
+### 1.3 Paylanmalar və ilkin müşahidələr
+
+```{r t2, warning=FALSE, echo=TRUE, error=FALSE, include=TRUE, message=FALSE}
+# Miqdar paylanması: 10 mln sətri qrafikə ötürmək əvəzinə əvvəlcə sayılır
+qnt_say <- fp_main_rv_prf %>%
+  filter(!satis_deyil, satis_novu == "Ədədlə", qnt <= 20) %>%
+  count(qnt)
+
+ggplotly(ggplot(qnt_say, aes(x = qnt, y = n)) +
+  geom_col(fill = "blue", color = "white") +
+  labs(title = "Ədədlə satışda miqdarın paylanması (0–20)",
+       x = "Miqdar (ədəd)", y = "Sətir sayı"))
+
+# Çəki ilə satışda miqdarın paylanması (0–3 kq, 100 qr addımla)
+ceki_say <- fp_main_rv_prf %>%
+  filter(!satis_deyil, satis_novu == "Çəki ilə (kq)", qnt <= 3) %>%
+  mutate(ceki_araligi = floor(qnt * 10) / 10) %>%
+  count(ceki_araligi)
+
+ggplotly(ggplot(ceki_say, aes(x = ceki_araligi, y = n)) +
+  geom_col(fill = "seagreen") +
+  labs(title = "Çəki ilə satışda miqdarın paylanması (0–3 kq)",
+       x = "Çəki (kq)", y = "Sətir sayı"))
+
+# Qiymət aralıqları üzrə sətir və gəlir payı
+qiymet_bolgusu <- fp_main_rv_prf %>%
+  filter(!satis_deyil) %>%
+  mutate(qiymet_araligi = cut(unit_price, c(-Inf, 0, 1, 2, 5, 10, 20, 50, 100, Inf),
+                              labels = c("0", "0–1", "1–2", "2–5", "5–10", "10–20", "20–50", "50–100", "100+"))) %>%
+  group_by(qiymet_araligi) %>%
+  summarise(setir_sayi = n(), gelir = round(sum(gelir), 2), .groups = "drop") %>%
+  mutate(setir_payi = round(100 * setir_sayi / sum(setir_sayi), 1),
+         gelir_payi = round(100 * gelir / sum(gelir), 1))
+
+ggplotly(ggplot(qiymet_bolgusu %>%
+                  pivot_longer(c(setir_payi, gelir_payi), names_to = "gosterici", values_to = "pay"),
+                aes(x = qiymet_araligi, y = pay, fill = gosterici)) +
+  geom_col(position = "dodge") +
+  labs(title = "Qiymət aralıqları üzrə sətir və gəlir payı (%)",
+       x = "Vahid qiymət aralığı (AZN)", y = "Pay (%)", fill = ""))
+
+cedvel(qiymet_bolgusu)
+
+ucuz_setir_payi <- sum(qiymet_bolgusu$setir_payi[qiymet_bolgusu$qiymet_araligi %in% c("0", "0–1", "1–2", "2–5")])
+baha_setir_payi <- qiymet_bolgusu$setir_payi[qiymet_bolgusu$qiymet_araligi == "100+"]
+baha_gelir_payi <- qiymet_bolgusu$gelir_payi[qiymet_bolgusu$qiymet_araligi == "100+"]
+```
+
+
+**Şərh:**<br>
+
+Ədədlə satışlarda əməliyyatların böyük əksəriyyəti 1 ədəd məhsul səviyyəsində baş verir. Bu, medianın 1 olması ilə uyğundur. Çəki ilə satışlarda ən çox rast gəlinən çəki aralığı `r ceki_say$ceki_araligi[which.max(ceki_say$n)]`–`r ceki_say$ceki_araligi[which.max(ceki_say$n)] + 0.1` kq-dır, yəni müştərilər açıq satılan məhsulları adətən az miqdarda alır.<br>
+
+Qiymət aralıqları üzrə bölgü satış strukturunun əsas xüsusiyyətini göstərir: sətirlərin `r f(ucuz_setir_payi, 1)`%-i qiyməti 5 AZN-dən çox olmayan məhsullardır. 100 AZN-dən baha məhsullar isə sətirlərin cəmi `r f(baha_setir_payi, 1)`%-ni təşkil etsə də gəlirin `r f(baha_gelir_payi, 1)`%-ni verir. Buna görə orta göstəricilər çox qeyri-sabitdir və müqayisələrdə median daha etibarlıdır.
+
+
+```{r t2b, warning=FALSE, echo=TRUE, error=FALSE, include=TRUE, message=FALSE}
+# Məhsullar üzrə statistika (satış olmayan və ümumi adlı sətirlər xaric)
+umumi_mehsul_payi <- fp_main_rv_prf %>%
+  filter(!satis_deyil) %>%
+  summarise(setir_payi = 100 * mean(umumi_mehsul),
+            gelir_payi = 100 * sum(gelir[umumi_mehsul]) / sum(gelir))
+
+mehsul_stat <- fp_main_rv_prf %>%
+  filter(!satis_deyil, !umumi_mehsul) %>%
+  group_by(product_key) %>%
+  summarise(setir_sayi    = n(),
+            umumi_gelir   = round(sum(gelir), 2),
+            median_qiymet = round(median(unit_price), 2),
+            pos_sayi      = n_distinct(pos_key),
+            .groups = "drop")
+
+top_mehsul_say   <- mehsul_stat %>% arrange(desc(setir_sayi)) %>% head(15)
+top_mehsul_gelir <- mehsul_stat %>% arrange(desc(umumi_gelir)) %>% head(15)
+
+ggplotly(ggplot(top_mehsul_say, aes(x = reorder(qisalt(product_key), setir_sayi), y = setir_sayi)) +
+  geom_col(fill = "royalblue") +
+  coord_flip() +
+  labs(title = "Satış sayına görə ilk 15 məhsul", x = "Məhsul", y = "Sətir sayı"))
+
+ggplotly(ggplot(top_mehsul_gelir, aes(x = reorder(qisalt(product_key), umumi_gelir), y = umumi_gelir)) +
+  geom_col(fill = "darkorange") +
+  coord_flip() +
+  labs(title = "Gəlirə görə ilk 15 məhsul", x = "Məhsul", y = "Ümumi gəlir (AZN)"))
+
+cedvel(top_mehsul_say)
+cedvel(top_mehsul_gelir)
+
+# İlk 100 məhsul adı satışların neçə faizini təşkil edir?
+mehsul_top100_payi <- 100 * sum(head(sort(mehsul_stat$setir_sayi, decreasing = TRUE), 100)) / sum(mehsul_stat$setir_sayi)
+```
+
+
+**Şərh:**<br>
+
+Satış sayına görə ilk sıralarda `r paste(head(top_mehsul_say$product_key, 5), collapse = ", ")` dayanır. Bu, datanın əsasən gündəlik tələbat məhsulları satan marketlərdən gəldiyini göstərir. Gəlirə görə ilk sıralarda isə `r paste(head(top_mehsul_gelir$product_key, 5), collapse = ", ")` var. Bu siyahıda çox satılan ucuz məhsullarla yanaşı az satılan, lakin bahalı məhsullar da yer alır.<br>
+
+Sətirlərin `r f(umumi_mehsul_payi$setir_payi, 1)`%-ində məhsul adı konkret deyil ("Sərbəst satış", "Ərzaq", boş ad və s.). Bu sətirlər gəlirin `r f(umumi_mehsul_payi$gelir_payi, 1)`%-ni təşkil edir və onların hansı məhsula aid olduğunu bilmək mümkün deyil. Bundan əlavə, eyni məhsul fərqli adlarla yazıla bilər (məsələn, "BANAN KG" və "BANAN KQ."), ona görə məhsul səviyyəsində rəqəmlər real satışdan bir qədər aşağı görünə bilər.<br>
+
+Məhsul adları çox parçalanıb: `r f(nrow(mehsul_stat))` fərqli konkret ad var və ilk 100 ad satışların cəmi `r f(mehsul_top100_payi, 1)`%-ni təşkil edir. Bu, məhsul adlarının vahid kataloq əsasında deyil, hər kassada sərbəst mətn kimi daxil edildiyini göstərir.
+
+
+```{r t2c, warning=FALSE, echo=TRUE, error=FALSE, include=TRUE, message=FALSE}
+# POS-ların ölçüsü və fəaliyyəti (yalnız konkret adı olan POS-lar)
+pos_olcu <- fp_main_rv_prf %>%
+  filter(!satis_deyil, !(pos_key %in% umumi_pos_adlari)) %>%
+  group_by(pos_key) %>%
+  summarise(umumi_gelir = sum(gelir),
+            setir_sayi  = n(),
+            aktiv_gun   = n_distinct(rec_date),
+            .groups = "drop") %>%
+  mutate(gelir_qrupu = cut(umumi_gelir, c(-Inf, 1000, 10000, 100000, 1000000, Inf),
+                           labels = c("< 1 min", "1–10 min", "10–100 min", "100 min – 1 mln", "1 mln +")))
+
+pos_qrup <- pos_olcu %>%
+  group_by(gelir_qrupu) %>%
+  summarise(pos_sayi = n(), umumi_gelir = round(sum(umumi_gelir), 2), .groups = "drop") %>%
+  mutate(pos_payi   = round(100 * pos_sayi / sum(pos_sayi), 1),
+         gelir_payi = round(100 * umumi_gelir / sum(umumi_gelir), 1))
+
+ggplotly(ggplot(pos_qrup %>%
+                  pivot_longer(c(pos_payi, gelir_payi), names_to = "gosterici", values_to = "pay"),
+                aes(x = gelir_qrupu, y = pay, fill = gosterici)) +
+  geom_col(position = "dodge") +
+  labs(title = "Gəlir qrupları üzrə POS sayı və gəlir payı (%)",
+       x = "POS-un ümumi gəliri (AZN)", y = "Pay (%)", fill = ""))
+
+cedvel(pos_qrup)
+
+aktiv_gun_say <- pos_olcu %>% count(aktiv_gun)
+
+ggplotly(ggplot(aktiv_gun_say, aes(x = aktiv_gun, y = n)) +
+  geom_col(fill = "slateblue") +
+  labs(title = "POS-ların aktiv gün sayına görə paylanması",
+       x = "Aktiv gün sayı", y = "POS sayı"))
+
+# Gəlirin cəmlənməsi: ən böyük 1% və 10% POS gəlirin neçə faizini toplayır?
+pos_sirali <- sort(pos_olcu$umumi_gelir, decreasing = TRUE)
+top1_payi  <- 100 * sum(head(pos_sirali, ceiling(0.01 * length(pos_sirali)))) / sum(pos_sirali)
+top10_payi <- 100 * sum(head(pos_sirali, ceiling(0.10 * length(pos_sirali)))) / sum(pos_sirali)
+
+# Ən böyük 20 sətir (düzəlişdən sonra)
+en_boyuk_setirler <- fp_main_rv_prf %>%
+  filter(!satis_deyil) %>%
+  arrange(desc(gelir)) %>%
+  head(20) %>%
+  select(pos, rec_date, product_name_duz, qnt, unit_price, gelir)
+
+cedvel(en_boyuk_setirler)
+```
+
+
+**Şərh:**<br>
+
+Bu hissədə yalnız konkret adı olan `r f(nrow(pos_olcu))` POS təhlil olunur. POS-ların gəliri çox qeyri-bərabər paylanıb: ən böyük 1% POS ümumi gəlirin `r f(top1_payi, 1)`%-ni, ən böyük 10% isə `r f(top10_payi, 1)`%-ni toplayır. Gəlir qrupları qrafiki də bunu göstərir: POS-ların böyük hissəsi kiçik gəlirli qruplardadır, gəlirin əsas hissəsi isə az sayda böyük POS-un payına düşür.<br>
+
+Aktiv gün paylanması iki qrup POS-u ayırır. `r f(sum(pos_olcu$aktiv_gun >= 35))` POS 35 gün və daha çox aktivdir: bunlar daimi işləyən marketlər və şəbəkələrdir. `r f(sum(pos_olcu$aktiv_gun <= 5))` POS isə cəmi 5 gün və ya daha az görünür. Bu, ya müvəqqəti satış nöqtələri, ya da 2.1-də göstərilən data boşluqlarının nəticəsidir.<br>
+
+Ən böyük sətirlər cədvəli göstərir ki, düzəlişdən sonra ən yüksək gəlirli sətirlər tək-tək satılan bahalı məhsullardır. Bu, real satış mənzərəsinə uyğundur. Xam datada isə ilk sıralarda 300 001 × 1.01 kimi avans sətirləri dururdu.
+
+
+## 2. Anomaliyalar
+
+
+### 2.1 Tarix üzrə anomaliyalar
+
+
+```{r t4, warning=FALSE, echo=TRUE, error=FALSE, include=TRUE, message=FALSE}
+gunluk_revenue <- fp_main_rv_prf %>%
+  filter(!satis_deyil) %>%
+  group_by(rec_date) %>%
+  summarise(setir_sayi = n(), daily_revenue = round(sum(gelir), 2), .groups = "drop") %>%
+  mutate(setir_basina_gelir = round(daily_revenue / setir_sayi, 2),
+         status = case_when(
+           setir_sayi > 2 * median(setir_sayi)   ~ "Yığılmış data",
+           setir_sayi < 0.5 * median(setir_sayi) ~ "Natamam data",
+           TRUE                                  ~ "Normal")) %>%
+  # Datası olmayan günlər də cədvələ əlavə olunur ki, qrafikdə boşluq görünsün
+  complete(rec_date = seq(min(rec_date), max(rec_date), by = "day")) %>%
+  mutate(status = ifelse(is.na(status), "Data yoxdur", status))
+
+ggplotly(ggplot(gunluk_revenue, aes(x = rec_date, y = daily_revenue)) +
+  geom_line(color = "royalblue", linewidth = 1) +
+  geom_point(aes(color = status)) +
+  labs(title = "Günlük satış gəlirinin dinamikası",
+       x = "Tarix", y = "Günlük gəlir (AZN)", color = "Status"))
+
+ggplotly(ggplot(gunluk_revenue, aes(x = rec_date, y = setir_sayi, fill = status)) +
+  geom_col() +
+  labs(title = "Günlük sətir sayı",
+       x = "Tarix", y = "Sətir sayı", fill = "Status"))
+
+cedvel(gunluk_revenue)
+
+pik_gun   <- gunluk_revenue %>% filter(!is.na(daily_revenue)) %>% slice_max(daily_revenue, n = 1, with_ties = FALSE)
+normal_gn <- gunluk_revenue %>% filter(status == "Normal")
+may_sonu  <- gunluk_revenue %>%
+  filter(status %in% c("Natamam data", "Data yoxdur"), rec_date > as.Date("2024-05-20"))
+```
+
+
+
+**Şərh:**<br>
+
+Günlük satış gəlirinin dinamikası göstərir ki, satışlar zaman üzrə sabit deyil. Xüsusilə `r pik_gun$rec_date` tarixində **`r f(pik_gun$daily_revenue / 1e6, 1)` mln AZN** gəlir qeydə alınıb, halbuki normal günlərdə orta gəlir `r f(mean(normal_gn$daily_revenue) / 1e6, 2)` mln AZN-dir.<br>
+
+Bu pikin səbəbini anlamaq üçün sətir sayına baxmaq lazımdır. Həmin gün `r f(pik_gun$setir_sayi)` sətir var, bu isə normal günün təxminən `r f(pik_gun$setir_sayi / mean(normal_gn$setir_sayi), 1)` mislidir. Sətir başına gəlir isə (`r f(pik_gun$setir_basina_gelir, 2)` AZN) normal günlərdən (`r f(mean(normal_gn$setir_basina_gelir), 2)` AZN) fərqlənmir. Deməli bu, satış davranışı yox, data yükləmə artefaktıdır: bir neçə günün datası dövrün ilk gününə yığılıb.<br>
+
+Günlük sətir sayı qrafiki ikinci, daha uzun anomaliyanı da göstərir. 30 aprel – 9 may arasında sətir sayı normalın təxminən 15–20%-nə düşür. Bayram günləri bu boyda və bu uzunluqda düşüşü izah etmir. Ehtimal ki, həmin dövrdə POS-ların əksəriyyətindən data gəlməyib. Mayın sonunda da (`r paste(format(may_sonu$rec_date, "%d.%m"), collapse = ", ")`) data natamamdır və ya ümumiyyətlə yoxdur.<br>
+
+Anomal günlər sadə qayda ilə müəyyən edilmişdir: sətir sayı medianın 2 mislindən çox olan gün "Yığılmış data", yarısından az olan gün isə "Natamam data" sayılır. Belə günlər müqayisə və proqnoz üçün yararsızdır, ona görə 3-cü bölmədə yalnız "Normal" statuslu `r nrow(normal_gn)` gün istifadə olunur.
+
+
+
+### 2.2 Kateqoriya üzrə aqreqasiya nümunəsi
+
+```{r t5, warning=FALSE, echo=TRUE, error=FALSE, include=TRUE, message=FALSE}
+top_rank <- fp_main_rv_prf %>%
+  filter(!satis_deyil) %>%
+  group_by(pos_key) %>%
+  summarise(total_revenue  = round(sum(gelir), 2),
+            setir_sayi     = n(),
+            ad_variantlari = n_distinct(pos),
+            .groups = "drop") %>%
+  mutate(pos_tipi   = ifelse(pos_key %in% umumi_pos_adlari, "Ümumi ad", "Konkret ad"),
+         gelir_payi = round(100 * total_revenue / sum(total_revenue), 2)) %>%
+  arrange(desc(total_revenue)) %>%
+  mutate(Rank = row_number()) %>%
+  rename(pos = pos_key)
+
+ggplotly(ggplot(top_rank %>% head(15), aes(x = reorder(qisalt(pos), total_revenue), y = total_revenue, fill = pos_tipi)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Gəlirə görə ilk 15 POS adı",
+       x = "POS (normallaşdırılmış ad)", y = "Ümumi gəlir (AZN)", fill = "POS tipi"))
+
+cedvel(top_rank)
+
+umumi_ad_payi <- sum(top_rank$gelir_payi[top_rank$pos_tipi == "Ümumi ad"])
+konkret       <- top_rank %>% filter(pos_tipi == "Konkret ad")
+konkret_top10 <- 100 * sum(head(konkret$total_revenue, 10)) / sum(konkret$total_revenue)
+```
+
+
+
+**Şərh:**<br>
+
+POS adları əvvəlcə normallaşdırılıb (böyük hərf, Azərbaycan hərfləri, kodlaşdırma xətaları), sonra aqreqasiya aparılıb. Reytinqin birinci sırasında **`r top_rank$pos[1]`** (`r f(top_rank$total_revenue[1] / 1e6, 2)` mln AZN) dayanır. `r ifelse(top_rank$pos_tipi[1] == "Ümumi ad", "Lakin bu, konkret mağaza deyil: bu adla yüzlərlə fərqli satış nöqtəsi qeydiyyatdadır.", "")` Ümumi adlar ("MAGAZA", "MARKET", "APTEK" və s.) birlikdə ümumi gəlirin `r f(umumi_ad_payi, 1)`%-ni təşkil edir.<br>
+
+Buna görə reytinqi yalnız konkret adlar üzrə şərh etmək düzgündür. Konkret adlı POS-lar arasında ilk sıraları `r paste(head(konkret$pos, 4), collapse = ", ")` tutur. İlk 10 konkret ad bu qrupun gəlirinin `r f(konkret_top10, 1)`%-ni toplayır, yəni satışlar məhdud sayda şəbəkədə cəmləşib. Qeyd: şəbəkə adı da bir mağaza yox, bir neçə filialın cəmi ola bilər.
+
+
+### 2.3 Ortalama gündəlik gəlir
+
+```{r t6, warning=FALSE, echo=TRUE, error=FALSE, include=TRUE, message=FALSE}
+pos_daily_avg <- pos_olcu %>%
+  rename(pos = pos_key, total_revenue = umumi_gelir, active_days = aktiv_gun) %>%
+  mutate(avg_daily_revenue = total_revenue / active_days) %>%
+  # 10 gündən az aktiv olan POS-lar orta göstəricini təhrif edir
+  filter(active_days >= 10) %>%
+  mutate(across(c(total_revenue, avg_daily_revenue), ~ round(.x, 2))) %>%
+  select(pos, total_revenue, active_days, setir_sayi, avg_daily_revenue)
+
+top_10_pos <- pos_daily_avg %>%
+  arrange(desc(avg_daily_revenue)) %>%
+  head(10)
+
+ggplotly(ggplot(top_10_pos, aes(x = reorder(qisalt(pos), avg_daily_revenue), y = avg_daily_revenue, fill = avg_daily_revenue)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Ən yüksək orta gündəlik gəliri olan top 10 POS",
+       x = "POS terminal / mağaza",
+       y = "Orta gündəlik gəlir (AZN)",
+       fill = "Gəlir səviyyəsi"))
+
+cedvel(pos_daily_avg)
+```
+
+
+
+**Şərh:**<br>
+
+Orta gündəlik gəlir hər POS üçün ümumi gəlirin aktiv gün sayına bölünməsi ilə hesablanmışdır. Analizə yalnız konkret adı olan və ən azı 10 gün aktiv olan `r f(nrow(pos_daily_avg))` POS daxil edilib. Cəmi bir neçə gün aktiv olan POS-lar bir-iki böyük satışla orta göstəricini süni şəkildə şişirdir.<br>
+
+Nəticələr göstərir ki, POS-lar arasında ciddi fərqlər var: orta gündəlik gəlirin medianı `r f(median(pos_daily_avg$avg_daily_revenue), 2)` AZN, maksimumu isə `r f(max(pos_daily_avg$avg_daily_revenue))` AZN-dir. Yüksək orta gündəlik gəlir iki fərqli modeldən yaranır: çox sayda ucuz satış edən böyük marketlər və az sayda, lakin bahalı satış edən ixtisaslaşmış mağazalar.<br>
+
+Qeyd: 2.1-də göstərilən data boşluqları `active_days` göstəricisinə də təsir edir, yəni POS aktiv olsa da, datası olmayan günlər aktiv gün kimi sayılmır.
+
+
+
+### 2.4 Məhsul növü üzrə fərqlər
+
+```{r t7, warning=FALSE, echo=TRUE, error=FALSE, include=TRUE, message=FALSE}
+fp_pdtype_by_rv <- fp_main_rv_prf %>%
+  filter(!satis_deyil) %>%
+  group_by(product_type2) %>%
+  summarise(emeliyyat_sayi = n(),
+            umumi_gelir    = round(sum(gelir), 2),
+            umumi_menfeet  = round(sum(menfeet, na.rm = TRUE), 2),
+            .groups = "drop") %>%
+  mutate(setir_payi = round(100 * emeliyyat_sayi / sum(emeliyyat_sayi), 2),
+         gelir_payi = round(100 * umumi_gelir / sum(umumi_gelir), 2))
+
+ggplotly(ggplot(
+  fp_pdtype_by_rv %>% filter(product_type2 != "Bilinmir"),
+  aes(x = product_type2, y = umumi_gelir)
+) +
+  geom_col(fill = "green") +
+  labs(
+    title = "Məhsul növü üzrə ümumi satış gəliri (yalnız xəritə ilə uyğunlaşan sətirlər)",
+    x = "Məhsul növü",
+    y = "Ümumi gəlir (AZN)"
+  ) +
+  theme_minimal())
+
+cedvel(fp_pdtype_by_rv)
+```
+
+
+
+**Şərh:**<br>
+
+Məhsul növü məlumatı yalnız `fp_map` xəritəsi ilə uyğunlaşan sətirlər üçün mövcuddur. Sətirlərin `r f(fp_pdtype_by_rv$setir_payi[fp_pdtype_by_rv$product_type2 == "Bilinmir"], 2)`%-i "Bilinmir" kateqoriyasına düşür. Bu, xəritədəki məhsul adlarının satış datasındakı adlarla çox az üst-üstə düşməsi ilə bağlıdır və ciddi data keyfiyyəti problemidir. Buna görə FOOD/NON-FOOD nəticələri bütün datanı təmsil etmir və yalnız uyğunlaşan nümunə üzrə şərh olunmalıdır.<br>
+
+Uyğunlaşan sətirlər arasında satış gəliri əsasən "FOOD" kateqoriyasında cəmləşir (`r f(fp_pdtype_by_rv$emeliyyat_sayi[fp_pdtype_by_rv$product_type2 == "FOOD"])` sətir). "NON-FOOD" kateqoriyasında cəmi `r f(fp_pdtype_by_rv$emeliyyat_sayi[fp_pdtype_by_rv$product_type2 == "NON-FOOD"])` sətir var, bu isə etibarlı müqayisə üçün azdır.
+
+
+```{r t8, warning=FALSE, echo=TRUE, error=FALSE, include=TRUE, message=FALSE}
+fp_pdtype_by_rv_mean <- fp_main_rv_prf %>%
+  filter(!satis_deyil) %>%
+  group_by(product_type2) %>%
+  summarise(emeliyyat_sayi = n(),
+            ortalama_gelir = round(mean(gelir), 2),
+            median_gelir   = round(median(gelir), 2),
+            median_marja   = round(median(profit_margin, na.rm = TRUE), 2),
+            .groups = "drop")
+
+ggplotly(ggplot(fp_pdtype_by_rv_mean %>%
+                  pivot_longer(c(ortalama_gelir, median_gelir), names_to = "gosterici", values_to = "deyer"),
+                aes(x = product_type2, y = deyer, fill = gosterici)) +
+  geom_col(position = "dodge") +
+  labs(title = "Məhsul növü üzrə sətir başına orta və median gəlir",
+       x = "Məhsul növü", y = "AZN", fill = ""))
+
+cedvel(fp_pdtype_by_rv_mean)
+```
+
+
+
+**Şərh:**<br>
+Məhsul növü (product_type) üzrə sətir başına gəlir müqayisə olunub. Paylanma sağa meylli olduğu üçün orta dəyərlə yanaşı median da göstərilir.<br><br>
+
+
+*FOOD* kateqoriyasında sətir başına median gəlir `r f(fp_pdtype_by_rv_mean$median_gelir[fp_pdtype_by_rv_mean$product_type2 == "FOOD"], 2)` AZN-dir. Bu, gündəlik tələbat məhsullarının tez-tez, lakin kiçik məbləğlərlə satılması ilə izah olunur.<br><br>
+
+
+*NON-FOOD* kateqoriyasında sətir başına median gəlir `r f(fp_pdtype_by_rv_mean$median_gelir[fp_pdtype_by_rv_mean$product_type2 == "NON-FOOD"], 2)` AZN-dir. Median marja FOOD üçün `r f(fp_pdtype_by_rv_mean$median_marja[fp_pdtype_by_rv_mean$product_type2 == "FOOD"], 2)`, NON-FOOD üçün `r f(fp_pdtype_by_rv_mean$median_marja[fp_pdtype_by_rv_mean$product_type2 == "NON-FOOD"], 2)`-dir.<br><br>
+
+
+*Bilinmir* kateqoriyası həm sətir sayına, həm də gəlirə görə tam üstünlük təşkil edir. Bu, məhsul növü məlumatının tam xəritələnməməsi ilə bağlıdır. Gələcəkdə məhsul adlarına açar söz qaydaları və ya oxşarlıq (fuzzy) uyğunlaşdırması tətbiq edilərək əhatə dairəsi genişləndirilə bilər.
+
+
+
+
+
+
+## 3. Proqnoz və fərziyyələr
+
+
+### 3.1 Korrelyasiya analizi
+
+```{r t9, warning=FALSE, echo=TRUE, error=FALSE, include=TRUE, message=FALSE}
+round(cor(pos_daily_avg[, c("total_revenue", "avg_daily_revenue", "active_days")]), 2)
+
+# Fərziyyə testi. H0: korrelyasiya 0-a bərabərdir. H1: korrelyasiya 0-dan fərqlidir.
+# Paylanma sağa meylli olduğu üçün Pearson ilə yanaşı Spearman (rank) korrelyasiyası da hesablanır.
+kor_test_gun <- cor.test(pos_daily_avg$total_revenue, pos_daily_avg$active_days)
+kor_test_avg <- cor.test(pos_daily_avg$total_revenue, pos_daily_avg$avg_daily_revenue)
+kor_spearman_gun <- cor.test(pos_daily_avg$total_revenue, pos_daily_avg$active_days,
+                             method = "spearman", exact = FALSE)
+kor_test_gun
+kor_test_avg
+kor_spearman_gun
+
+pos_long <- pos_daily_avg %>% pivot_longer(cols = c(avg_daily_revenue, active_days),
+                                           names_to = "metric",
+                                           values_to = "value")
+
+ggplotly(ggplot(pos_long, aes(x = total_revenue, y = value)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "lm") +
+  scale_x_log10() +
+  facet_wrap(~ metric, scales = "free_y") +
+  labs(x = "Ümumi gəlir (AZN, log şkala)", y = ""))
+```
+
+
+**Şərh:**<br>
+
+Korrelyasiya analizi POS səviyyəsində aparılıb və hər əlaqə üçün fərziyyə testi edilib (H0: korrelyasiya 0-dır). Gəlir çox sağa meylli olduğu üçün qrafikdə X oxu log şkalada verilib.<br>
+
+POS-ların ümumi gəliri ilə orta gündəlik gəliri arasında yüksək müsbət əlaqə müşahidə edilir **(R = `r round(kor_test_avg$estimate, 2)`, p = `r signif(kor_test_avg$p.value, 2)`)**. Lakin bu nəticə gözləniləndir və yeni məlumat vermir: ümumi gəlir onsuz da orta gündəlik gəlirin aktiv gün sayına hasilidir (`total_revenue = avg_daily_revenue × active_days`). Yəni bu əlaqə riyazi qurğudan yaranır və proqnoz üçün istifadə oluna bilməz.<br>
+
+Aktiv gün sayı ilə ümumi gəlir arasında Pearson korrelyasiyası **R = `r round(kor_test_gun$estimate, 2)`** (p = `r signif(kor_test_gun$p.value, 2)`), Spearman korrelyasiyası isə **ρ = `r round(kor_spearman_gun$estimate, 2)`**-dir. Pearson ekstrem dəyərlərə həssas olduğu üçün rank əsaslı Spearman əlaqənin real gücünü daha düzgün göstərir. p-dəyər 0.05-dən kiçik olsa da, POS sayı çox olduqda zəif əlaqə də statistik əhəmiyyətli çıxa bilər, ona görə əlaqənin gücünə baxmaq lazımdır.
+
+
+### 3.2 Reqressiya modeli
+
+```{r t10, warning=FALSE, echo=TRUE, error=FALSE, include=TRUE, message=FALSE}
+# Proqnoz yalnız "Normal" statuslu günlər üzrə qurulur (bax 2.1)
+gunluk_model_data <- gunluk_revenue %>%
+  filter(status == "Normal") %>%
+  arrange(rec_date) %>%
+  mutate(hefte_sonu = as.integer(wday(rec_date, week_start = 1) >= 6),   # 1 = şənbə/bazar
+         gun_tipi   = factor(ifelse(hefte_sonu == 1, "Həftə sonu", "İş günü"),
+                             levels = c("İş günü", "Həftə sonu")),
+         trend      = as.numeric(rec_date - min(rec_date)))
+
+# Fərziyyə: H0 - həftə sonu və iş günlərində günlük gəlir eynidir. H1 - fərqlidir.
+hefte_test <- wilcox.test(daily_revenue ~ gun_tipi, data = gunluk_model_data, exact = FALSE)
+hefte_test
+
+model <- lm(daily_revenue ~ hefte_sonu + trend, data = gunluk_model_data)
+
+summary(model)
+
+model_emsal <- summary(model)$coefficients
+```
+
+
+**Şərh:**<br>
+
+Əvvəlki versiyadakı `total_revenue ~ avg_daily_revenue` modeli riyazi eynilik üzərində qurulduğu üçün (bax 3.1) daha mənalı modellə əvəz edilmişdir. Yeni model günlük gəliri günün tipi (iş günü / həftə sonu) və zaman trendi ilə izah edir. Model yalnız data keyfiyyəti normal olan `r nrow(gunluk_model_data)` gün üzrə qurulub.<br>
+
+**Fərziyyə testi:** Wilcoxon testinə görə həftə sonu və iş günlərinin günlük gəliri arasındakı fərq `r ifelse(hefte_test$p.value < 0.05, "statistik baxımdan əhəmiyyətlidir", "statistik baxımdan əhəmiyyətli deyil")` (p = `r signif(hefte_test$p.value, 2)`), yəni H0 `r ifelse(hefte_test$p.value < 0.05, "rədd edilir", "rədd edilmir")`.<br>
+
+**Model:** Modelin izah gücü R² = `r round(summary(model)$r.squared, 2)`-dir. Həftə sonu əmsalı `r f(model_emsal["hefte_sonu", 1])` AZN (p = `r signif(model_emsal["hefte_sonu", 4], 2)`), trend əmsalı isə gündə `r f(model_emsal["trend", 1])` AZN-dir (p = `r signif(model_emsal["trend", 4], 2)`). Müşahidə sayı az olduğu üçün (`r nrow(gunluk_model_data)` gün) nəticələr ehtiyatla şərh olunmalıdır.
+
+
+
+### 3.3 Sadə proqnoz yanaşması
+
+```{r t11, warning=FALSE, echo=TRUE, error=FALSE, include=TRUE, message=FALSE}
+# Son 5 normal gün test üçün ayrılır, model qalan günlər üzrə öyrədilir
+n_test <- 5
+train <- head(gunluk_model_data, nrow(gunluk_model_data) - n_test)
+test  <- tail(gunluk_model_data, n_test)
+
+model_train <- lm(daily_revenue ~ hefte_sonu + trend, data = train)
+
+test <- test %>%
+  mutate(pred       = round(predict(model_train, newdata = test), 2),
+         naiv_pred  = round(mean(train$daily_revenue), 2),
+         xeta       = round(daily_revenue - pred, 2),
+         xeta_faizi = round(100 * abs(xeta) / daily_revenue, 1))
+
+# Dəqiqlik göstəriciləri: model vs sadə orta (naiv proqnoz)
+mae_model  <- mean(abs(test$daily_revenue - test$pred))
+mae_naiv   <- mean(abs(test$daily_revenue - test$naiv_pred))
+mape_model <- mean(test$xeta_faizi)
+
+data.frame(Model = c("Reqressiya (gün tipi + trend)", "Naiv (train ortalaması)"),
+           MAE   = round(c(mae_model, mae_naiv), 0))
+
+proqnoz_qrafik <- gunluk_model_data %>%
+  mutate(pred  = round(predict(model_train, newdata = gunluk_model_data), 2),
+         hisse = ifelse(rec_date %in% test$rec_date, "Test", "Train"))
+
+ggplotly(ggplot(proqnoz_qrafik, aes(x = rec_date)) +
+  geom_point(aes(y = daily_revenue, color = hisse), size = 2) +
+  geom_line(aes(y = pred), color = "black", linetype = "dashed") +
+  labs(title = "Günlük gəlir: faktiki və proqnoz",
+       x = "Tarix", y = "Günlük gəlir (AZN)", color = "Hissə"))
+
+cedvel(test %>% select(rec_date, gun_tipi, daily_revenue, pred, naiv_pred, xeta, xeta_faizi))
+```
+
+
+**Şərh:**<br>
+
+Proqnozun keyfiyyətini yoxlamaq üçün son `r n_test` normal gün test hissəsi kimi ayrılmış, model isə qalan günlər üzrə öyrədilmişdir. Test günlərində modelin orta mütləq xətası (MAE) `r f(mae_model)` AZN, orta faiz xətası (MAPE) isə `r f(mape_model, 1)`%-dir. Müqayisə üçün sadəcə train dövrünün ortalamasını proqnoz kimi götürən naiv yanaşmanın MAE-si `r f(mae_naiv)` AZN-dir. Model naiv yanaşmadan `r ifelse(mae_model < mae_naiv, "daha yaxşı", "daha zəif")` nəticə göstərir.<br>
+
+Qısa dövr və data boşluqları səbəbindən bu, yalnız sadə nümunə proqnozudur. Daha etibarlı proqnoz üçün bir neçə aylıq fasiləsiz data lazımdır.
+
+
+
+## 4. Xülasə
+
+### 4.1 Xülasə
+
+Aparılan təhlil POS əməliyyatlarının gəlir strukturunu və davranışını qiymətləndirməyə imkan vermişdir. Analizin ən vacib mərhələsi data təmizləmə olmuşdur: xam datada miqdar və qiymətə sistematik +1 əlavə olunduğu aşkar edilmiş və düzəliş edilmişdir. Nəticədə ümumi gəlir `r f(xam_umumi_gelir / 1e6, 1)` mln AZN əvəzinə `r f(umumi_gelir / 1e6, 1)` mln AZN təşkil edir. Bundan əlavə, `r f(satis_deyil_sayi)` satış olmayan sətir (kredit ödənişi, avans) analizdən çıxarılmış, pozulmuş məhsul adları bərpa edilmişdir.<br>
+
+**Deskriptiv** təhlil göstərir ki, tipik satış 1 ədəd məhsuldur, sətir üzrə median gəlir `r stat_umumi$Median[stat_umumi$Dəyişən == "gelir"]` AZN-dir. Satışların `r stat_satis_novu$setir_payi[stat_satis_novu$satis_novu == "Çəki ilə (kq)"]`%-i çəki ilə aparılır. Sətirlərin böyük əksəriyyəti ucuz məhsullardır, lakin gəlirin `r f(baha_gelir_payi, 1)`%-i 100 AZN-dən baha az sayda məhsuldan gəlir. Konkret adlı POS-lar arasında ən böyük 10% POS gəlirin `r f(top10_payi, 1)`%-ni toplayır.<br>
+
+**Anomaliya** təhlili zamanı əsas anomaliyaların satış davranışından yox, data yüklənməsindən qaynaqlandığı müəyyən edilmişdir: `r pik_gun$rec_date` tarixinə bir neçə günün datası yığılıb, 30 aprel – 9 may və mayın sonunda isə data natamamdır. POS adları mağaza identifikatoru olmadığı üçün ümumi adlar ("MAGAZA", "MARKET" və s.) gəlirin `r f(umumi_ad_payi, 1)`%-ni təşkil edir. Məhsul növü xəritəsi isə sətirlərin yalnız `r f(100 * xerite_ehatesi, 2)`%-ni əhatə edir.<br>
+
+**Proqnoz və fərziyyələr** mərhələsində müəyyən edilmişdir ki, ümumi gəlir ilə orta gündəlik gəlir arasındakı güclü əlaqə riyazi xarakter daşıyır. Günlük gəlir üçün qurulan sadə model test günlərində `r f(mape_model, 1)`% orta xəta ilə işləyir.
+
+
+### 4.2 Tövsiyələr
+
+Data mənbəyi ilə miqdar və qiymət sütunlarındakı +1 sürüşməsinin səbəbi dəqiqləşdirilməli və gələcək yükləmələrdə bu problem aradan qaldırılmalıdır.<br>
+
+`r pik_gun$rec_date` tarixindəki yığılmış data və 30 aprel – 9 may dövründəki boşluq üzrə data yükləmə prosesi audit edilməlidir. Gündəlik hesabatlarda sətir sayına əsaslanan avtomatik keyfiyyət yoxlaması (bu hesabatdakı "status" qaydası) tətbiq oluna bilər.<br>
+
+POS-lar üçün unikal identifikator (məsələn, VÖEN + obyekt kodu) əlavə edilməlidir. Bu olmadan mağaza səviyyəsində reytinq və müqayisə etibarlı deyil.<br>
+
+Məhsul adları vahid kataloq (barkod və ya məhsul kodu) əsasında daxil edilməli, kodlaşdırma UTF-8 standartına uyğunlaşdırılmalıdır. Məhsul növü xəritəsinin əhatə dairəsi genişləndirilməli, avans və kredit ödənişi kimi satış olmayan əməliyyatlar ayrıca əməliyyat növü ilə qeyd olunmalıdır.<br>
+
+Gələcək tədqiqatlarda daha uzun və fasiləsiz zaman intervalı, əlavə dəyişənlər (əməliyyat sayı, POS tipi, bayram günləri) daxil edilərək proqnoz modelləri təkmilləşdirilə bilər.

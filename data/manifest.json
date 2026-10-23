@@ -1,0 +1,12 @@
+[
+  {
+    "file": "fp_receipts.rds",
+    "bytes": 231961439,
+    "sha256": "8bc86c86eb310b1150e2c0a788c9f39528b0b1a9ccd2793eda7637f4d2cb4489"
+  },
+  {
+    "file": "fp_map.rds",
+    "bytes": 2168558,
+    "sha256": "1630dc07051a035a452e78c24fb7a8ea64b4ee914834862779973282abde5b69"
+  }
+]

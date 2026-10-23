@@ -1,0 +1,10 @@
+# Local data is distributed as GitHub Release assets.
+*.rds
+*.RData
+.Rhistory
+.Ruserdata
+.Rproj.user/
+.cache/
+.Renviron
+.env
+.DS_Store

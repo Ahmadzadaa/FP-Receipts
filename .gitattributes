@@ -1,0 +1,7 @@
+*.R text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.Rmd -text
+*.html -text
+*.pptx binary
+*.png binary
