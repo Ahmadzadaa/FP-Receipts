@@ -2,6 +2,16 @@
 
 Azərbaycan dilində **R Shiny** tətbiqi, analitik hesabat və PowerPoint təqdimatı. Tətbiqin bütün R kodu, CSS dizaynı və JavaScript funksiyaları **bir `FP_Receipts_Shiny.R` faylındadır**.
 
+## Portfolio overview
+
+A retail analytics case study built with **R, Shiny, data.table and Plotly**, covering **10,000,909 receipt line items**. It combines exploratory analysis, data-quality diagnostics, time-series forecasting, scenario modelling and an executive presentation.
+
+**Skills demonstrated:** preparing large datasets, repairing text encoding, normalising product/POS names, designing interactive dashboards, validating forecasts with a chronological holdout, and communicating analytical limitations.
+
+**Selected findings:** the default adjusted sales base contains **9,992,904 line items** and **AZN 55.01 million** in sales value. Product mapping covers approximately **1.32%** of rows, which limits category and profit conclusions. Only **24 of 43 calendar days** meet the source-wide normal-volume criterion; forecasts are presented as conditional estimates.
+
+The original Rmd/HTML report is retained as the analytical reference. The Shiny application implements the interactive workflow in a single `.R` file; the presentation summarises the analysis in 21 slides.
+
 ![FP Receipts tətbiqinin görünüşü](assets/preview.png)
 
 ## Layihənin tərkibi
@@ -20,7 +30,7 @@ R **4.1 və ya daha yeni versiya** istifadə edin. RStudio-da işlətmək də m�
 
 ### 1. Layihəni və məlumatı endirin
 
-Bu private repoya girişiniz olan GitHub hesabı ilə layihəni klonlayın və ya **Code → Download ZIP** seçin. İki RDS faylı [v1.0.0 buraxılışının Assets bölməsindədir](https://github.com/Ahmadzadaa/FP-Receipts/releases/tag/v1.0.0).
+Layihəni klonlayın və ya **Code → Download ZIP** seçin. İki RDS faylı [v1.0.0 buraxılışının Assets bölməsindədir](https://github.com/Ahmadzadaa/FP-Receipts/releases/tag/v1.0.0).
 
 `fp_receipts.rds` və `fp_map.rds` fayllarını `.R` faylı ilə eyni qovluğa qoyun:
 
